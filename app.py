@@ -163,4 +163,5 @@ def _optional_int(value: str | None) -> int | None:
 
 if __name__ == "__main__":
     app = create_app()
-    app.run(debug=True)
+    debug = os.environ.get("FLASK_DEBUG", "0") == "1"
+    app.run(debug=debug)
