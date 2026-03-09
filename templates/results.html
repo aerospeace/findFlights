@@ -44,7 +44,7 @@
         </div>
         <div class="col-md-2">
           <label for="filterAirline" class="form-label form-label-sm mb-1">Airline</label>
-          <select class="form-select form-select-sm" id="filterAirline"><option value="">All airlines</option></select>
+          <select class="form-select form-select-sm" id="filterAirline" multiple size="3"></select>
         </div>
         <div class="col-md-1">
           <label for="filterStops" class="form-label form-label-sm mb-1">Stops</label>
@@ -144,16 +144,6 @@
   const fromSelect = document.getElementById('filterFromAirport');
   const toSelect = document.getElementById('filterToAirport');
 
-  if (airlineSelect) {
-    const airlines = [...new Set(cards.map(c => c.dataset.airline))].sort();
-    airlines.forEach(a => {
-      const opt = document.createElement('option');
-      opt.value = a;
-      opt.textContent = a;
-      airlineSelect.appendChild(opt);
-    });
-  }
-
   function fillMultiSelect(selectEl, values) {
     if (!selectEl) return;
     values.forEach(v => {
@@ -164,6 +154,7 @@
     });
   }
 
+  fillMultiSelect(airlineSelect, [...new Set(cards.map(c => c.dataset.airline))].sort());
   fillMultiSelect(dateSelect, [...new Set(cards.map(c => c.dataset.date))].sort());
   fillMultiSelect(fromSelect, [...new Set(cards.map(c => c.dataset.fromAirport))].sort());
   fillMultiSelect(toSelect, [...new Set(cards.map(c => c.dataset.toAirport))].sort());
@@ -174,7 +165,7 @@
   }
 
   function applyFilters() {
-    const airline = (airlineSelect?.value || '').toLowerCase();
+    const airlines = selectedValues(airlineSelect).map(v => v.toLowerCase());
     const fromAirports = selectedValues(fromSelect).map(v => v.toLowerCase());
     const toAirports = selectedValues(toSelect).map(v => v.toLowerCase());
     const filterDates = selectedValues(dateSelect);
@@ -193,7 +184,7 @@
       const cardDate = card.dataset.date || '';
 
       const ok =
-        (!airline || cardAirline.includes(airline)) &&
+        (airlines.length === 0 || airlines.includes(cardAirline)) &&
         (fromAirports.length === 0 || fromAirports.includes(cardFrom)) &&
         (toAirports.length === 0 || toAirports.includes(cardTo)) &&
         (filterDates.length === 0 || filterDates.includes(cardDate)) &&

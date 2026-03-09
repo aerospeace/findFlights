@@ -233,6 +233,10 @@ class TestRoutes:
         assert response.status_code == 200
         assert b"Search" in response.data
 
+    def test_index_advanced_options_toggle_present(self, client):
+        response = client.get("/")
+        assert b"data-bs-target=\"#advancedOptions\"" in response.data
+
     def test_search_missing_params_redirects(self, client):
         response = client.get("/search")
         assert response.status_code == 302
@@ -272,6 +276,21 @@ class TestRoutes:
                 )
         assert response.status_code == 200
         assert b"Test Airline" in response.data
+
+    def test_results_airline_filter_is_multiselect(self, client, app):
+        mock_result = _make_mock_result()
+        with patch("flights_service.get_flights", return_value=mock_result):
+            with app.app_context():
+                response = client.get(
+                    "/search",
+                    query_string={
+                        "from_airports": "JFK",
+                        "to_airports": "LAX",
+                        "date_from": "2025-06-01",
+                        "date_to": "2025-06-01",
+                    },
+                )
+        assert b"id=\"filterAirline\" multiple" in response.data
 
     def test_api_search_missing_params(self, client):
         response = client.get("/api/search")
