@@ -16,7 +16,7 @@
               <label for="from_airports" class="form-label fw-semibold">From</label>
               <div class="input-group">
                 <span class="input-group-text"><i class="bi bi-geo-alt"></i></span>
-                <input type="text" class="form-control text-uppercase" id="from_airports" name="from_airports" placeholder="e.g. JFK, EWR" title="Comma-separated 3-letter IATA airport codes" required>
+                <input type="text" class="form-control text-uppercase" id="from_airports" name="from_airports" placeholder="e.g. JFK, EWR" title="Comma-separated 3-letter IATA airport codes" value="{{ defaults.from_airports if defaults else '' }}" required>
               </div>
               <div class="form-text">One or more 3-letter IATA codes, comma-separated</div>
             </div>
@@ -24,7 +24,7 @@
               <label for="to_airports" class="form-label fw-semibold">To</label>
               <div class="input-group">
                 <span class="input-group-text"><i class="bi bi-geo"></i></span>
-                <input type="text" class="form-control text-uppercase" id="to_airports" name="to_airports" placeholder="e.g. LAX, SFO" title="Comma-separated 3-letter IATA airport codes" required>
+                <input type="text" class="form-control text-uppercase" id="to_airports" name="to_airports" placeholder="e.g. LAX, SFO" title="Comma-separated 3-letter IATA airport codes" value="{{ defaults.to_airports if defaults else '' }}" required>
               </div>
               <div class="form-text">One or more 3-letter IATA codes, comma-separated</div>
             </div>
@@ -35,22 +35,22 @@
               <label for="date_from" class="form-label fw-semibold">Departure date from</label>
               <div class="input-group">
                 <span class="input-group-text"><i class="bi bi-calendar3"></i></span>
-                <input type="date" class="form-control" id="date_from" name="date_from" required>
+                <input type="date" class="form-control" id="date_from" name="date_from" value="{{ defaults.date_from if defaults else '' }}" required>
               </div>
             </div>
             <div class="col-md-6">
               <label for="date_to" class="form-label fw-semibold">Departure date to</label>
               <div class="input-group">
                 <span class="input-group-text"><i class="bi bi-calendar-range"></i></span>
-                <input type="date" class="form-control" id="date_to" name="date_to">
+                <input type="date" class="form-control" id="date_to" name="date_to" value="{{ defaults.date_to if defaults else '' }}">
               </div>
             </div>
             <div class="col-md-12">
               <label for="trip" class="form-label fw-semibold">Trip type</label>
               <select class="form-select" id="trip" name="trip">
-                <option value="one-way">One-way</option>
-                <option value="round-trip">Round-trip</option>
-                <option value="multi-city">Multi-city</option>
+                <option value="one-way" {% if defaults and defaults.trip == 'one-way' %}selected{% endif %}>One-way</option>
+                <option value="round-trip" {% if defaults and defaults.trip == 'round-trip' %}selected{% endif %}>Round-trip</option>
+                <option value="multi-city" {% if defaults and defaults.trip == 'multi-city' %}selected{% endif %}>Multi-city</option>
               </select>
             </div>
           </div>
@@ -59,19 +59,19 @@
             <div class="col-md-4">
               <label for="seat" class="form-label fw-semibold">Cabin class</label>
               <select class="form-select" id="seat" name="seat">
-                <option value="economy">Economy</option>
-                <option value="premium-economy">Premium Economy</option>
-                <option value="business">Business</option>
-                <option value="first">First</option>
+                <option value="economy" {% if defaults and defaults.seat == 'economy' %}selected{% endif %}>Economy</option>
+                <option value="premium-economy" {% if defaults and defaults.seat == 'premium-economy' %}selected{% endif %}>Premium Economy</option>
+                <option value="business" {% if defaults and defaults.seat == 'business' %}selected{% endif %}>Business</option>
+                <option value="first" {% if defaults and defaults.seat == 'first' %}selected{% endif %}>First</option>
               </select>
             </div>
             <div class="col-md-4">
               <label for="adults" class="form-label fw-semibold">Adults</label>
-              <input type="number" class="form-control" id="adults" name="adults" min="1" max="9" value="1">
+              <input type="number" class="form-control" id="adults" name="adults" min="1" max="9" value="{{ defaults.adults if defaults else '1' }}">
             </div>
             <div class="col-md-4">
               <label for="children" class="form-label fw-semibold">Children</label>
-              <input type="number" class="form-control" id="children" name="children" min="0" max="9" value="0">
+              <input type="number" class="form-control" id="children" name="children" min="0" max="9" value="{{ defaults.children if defaults else '0' }}">
             </div>
           </div>
 
@@ -85,15 +85,15 @@
                   <div class="col-md-6">
                     <label for="max_stops" class="form-label">Max stops</label>
                     <select class="form-select" id="max_stops" name="max_stops">
-                      <option value="">Any</option>
-                      <option value="0">Non-stop only</option>
-                      <option value="1">Up to 1 stop</option>
-                      <option value="2">Up to 2 stops</option>
+                      <option value="" {% if not defaults or defaults.max_stops == '' %}selected{% endif %}>Any</option>
+                      <option value="0" {% if defaults and defaults.max_stops == '0' %}selected{% endif %}>Non-stop only</option>
+                      <option value="1" {% if defaults and defaults.max_stops == '1' %}selected{% endif %}>Up to 1 stop</option>
+                      <option value="2" {% if defaults and defaults.max_stops == '2' %}selected{% endif %}>Up to 2 stops</option>
                     </select>
                   </div>
                   <div class="col-md-6">
                     <label for="cache_days" class="form-label">Cache freshness (days)</label>
-                    <input type="number" class="form-control" id="cache_days" name="cache_days" min="0" max="30" value="1">
+                    <input type="number" class="form-control" id="cache_days" name="cache_days" min="0" max="30" value="{{ defaults.cache_days if defaults else '1' }}">
                   </div>
                 </div>
               </div>

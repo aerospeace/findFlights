@@ -46,7 +46,19 @@ def create_app(config: dict | None = None) -> Flask:
 
     @app.route("/")
     def index():
-        return render_template("index.html")
+        defaults = {
+            "from_airports": request.args.get("from_airports", ""),
+            "to_airports": request.args.get("to_airports", ""),
+            "date_from": request.args.get("date_from", ""),
+            "date_to": request.args.get("date_to", ""),
+            "trip": request.args.get("trip", "one-way"),
+            "seat": request.args.get("seat", "economy"),
+            "adults": request.args.get("adults", "1"),
+            "children": request.args.get("children", "0"),
+            "max_stops": request.args.get("max_stops", ""),
+            "cache_days": request.args.get("cache_days", str(app.config["CACHE_DAYS"])),
+        }
+        return render_template("index.html", defaults=defaults)
 
     @app.route("/search", methods=["GET", "POST"])
     def search():
@@ -453,7 +465,7 @@ def _representation(
 ) -> str:
     dep = _excel_datetime(departure, fallback_date)
     arr = _excel_datetime(arrival, fallback_date)
-    return f"{airline} / {from_airport}, {dep} -> {to_airport}, {arr} / {price}"
+    return f"{airline} / {from_airport}, {dep} -> {to_airport}, {arr} / {price}€"
 
 
 def _is_no_flights_error(exc: Exception) -> bool:

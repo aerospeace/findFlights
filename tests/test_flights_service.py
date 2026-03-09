@@ -17,6 +17,7 @@ from app import (
     _is_no_flights_error,
     _normalized_price,
     _parse_airports,
+    _representation,
     create_app,
 )
 from models import db, FlightQuery
@@ -435,6 +436,23 @@ class TestRoutes:
         assert b"No flights found for this itinerary" in response.data
         assert b"Could not fetch flights for this itinerary" not in response.data
 
+    def test_new_search_link_prefills_previous_values(self, client, app):
+        mock_result = _make_mock_result()
+        with patch("flights_service.get_flights", return_value=mock_result):
+            with app.app_context():
+                response = client.get(
+                    "/search",
+                    query_string={
+                        "from_airports": "JFK",
+                        "to_airports": "LAX",
+                        "date_from": "2025-06-01",
+                        "date_to": "2025-06-02",
+                        "trip": "round-trip",
+                        "seat": "business",
+                    },
+                )
+        assert b"/?from_airports=JFK&amp;to_airports=LAX" in response.data
+
 
 class TestSearchHelpers:
     def test_parse_airports(self):
@@ -454,3 +472,15 @@ class TestSearchHelpers:
 
     def test_no_flights_error_detection(self):
         assert _is_no_flights_error(RuntimeError("No flights found: Skip to main content")) is True
+
+    def test_representation_appends_euro(self):
+        text = _representation(
+            airline="Air Test",
+            from_airport="JFK",
+            to_airport="LAX",
+            departure="10:45 AM on Sun, Jul 12",
+            arrival="01:45 PM on Sun, Jul 12",
+            fallback_date="2025-07-12",
+            price="123.45",
+        )
+        assert text.endswith("123.45€")
