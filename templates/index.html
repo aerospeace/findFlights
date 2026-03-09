@@ -14,53 +14,60 @@
           <!-- Airports -->
           <div class="row g-3 mb-3">
             <div class="col-md-6">
-              <label for="from_airport" class="form-label fw-semibold">From</label>
+              <label for="from_airports" class="form-label fw-semibold">From</label>
               <div class="input-group">
                 <span class="input-group-text"><i class="bi bi-geo-alt"></i></span>
                 <input type="text"
                        class="form-control text-uppercase"
-                       id="from_airport"
-                       name="from_airport"
-                       placeholder="e.g. JFK"
-                       maxlength="3"
-                       pattern="[A-Za-z]{3}"
-                       title="3-letter IATA airport code"
+                       id="from_airports"
+                       name="from_airports"
+                       placeholder="e.g. JFK, EWR"
+                       title="Comma-separated 3-letter IATA airport codes"
                        required>
               </div>
-              <div class="form-text">3-letter IATA code</div>
+              <div class="form-text">One or more 3-letter IATA codes, comma-separated</div>
             </div>
             <div class="col-md-6">
-              <label for="to_airport" class="form-label fw-semibold">To</label>
+              <label for="to_airports" class="form-label fw-semibold">To</label>
               <div class="input-group">
                 <span class="input-group-text"><i class="bi bi-geo"></i></span>
                 <input type="text"
                        class="form-control text-uppercase"
-                       id="to_airport"
-                       name="to_airport"
-                       placeholder="e.g. LAX"
-                       maxlength="3"
-                       pattern="[A-Za-z]{3}"
-                       title="3-letter IATA airport code"
+                       id="to_airports"
+                       name="to_airports"
+                       placeholder="e.g. LAX, SFO"
+                       title="Comma-separated 3-letter IATA airport codes"
                        required>
               </div>
-              <div class="form-text">3-letter IATA code</div>
+              <div class="form-text">One or more 3-letter IATA codes, comma-separated</div>
             </div>
           </div>
 
           <!-- Date & Trip type -->
           <div class="row g-3 mb-3">
             <div class="col-md-6">
-              <label for="date" class="form-label fw-semibold">Departure date</label>
+              <label for="date_from" class="form-label fw-semibold">Departure date from</label>
               <div class="input-group">
                 <span class="input-group-text"><i class="bi bi-calendar3"></i></span>
                 <input type="date"
                        class="form-control"
-                       id="date"
-                       name="date"
+                       id="date_from"
+                       name="date_from"
                        required>
               </div>
             </div>
             <div class="col-md-6">
+              <label for="date_to" class="form-label fw-semibold">Departure date to</label>
+              <div class="input-group">
+                <span class="input-group-text"><i class="bi bi-calendar-range"></i></span>
+                <input type="date"
+                       class="form-control"
+                       id="date_to"
+                       name="date_to"
+                       required>
+              </div>
+            </div>
+            <div class="col-md-12">
               <label for="trip" class="form-label fw-semibold">Trip type</label>
               <select class="form-select" id="trip" name="trip">
                 <option value="one-way">One-way</option>

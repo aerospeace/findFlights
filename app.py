@@ -1,7 +1,10 @@
 import os
 import re
+from csv import DictWriter
+from datetime import date as dt_date, timedelta
+from io import StringIO
 
-from flask import Flask, jsonify, redirect, render_template, request, url_for
+from flask import Flask, Response, jsonify, redirect, render_template, request, url_for
 
 from flights_service import search_flights
 from models import db
@@ -45,9 +48,10 @@ def create_app(config: dict | None = None) -> Flask:
     def search():
         if request.method == "POST":
             params = {
-                "from_airport": request.form.get("from_airport", "").strip().upper(),
-                "to_airport": request.form.get("to_airport", "").strip().upper(),
-                "date": request.form.get("date", ""),
+                "from_airports": request.form.get("from_airports", "").strip().upper(),
+                "to_airports": request.form.get("to_airports", "").strip().upper(),
+                "date_from": request.form.get("date_from", ""),
+                "date_to": request.form.get("date_to", ""),
                 "trip": request.form.get("trip", "one-way"),
                 "seat": request.form.get("seat", "economy"),
                 "adults": int(request.form.get("adults", 1)),
@@ -60,11 +64,12 @@ def create_app(config: dict | None = None) -> Flask:
             return redirect(url_for("search", **params))
 
         # GET – run the search (or show the form if params are missing)
-        from_airport = request.args.get("from_airport", "").strip().upper()
-        to_airport = request.args.get("to_airport", "").strip().upper()
-        date = request.args.get("date", "")
+        from_airports_text = request.args.get("from_airports", "").strip().upper()
+        to_airports_text = request.args.get("to_airports", "").strip().upper()
+        date_from = request.args.get("date_from", "")
+        date_to = request.args.get("date_to", "")
 
-        if not (from_airport and to_airport and date):
+        if not (from_airports_text and to_airports_text and date_from):
             return redirect(url_for("index"))
 
         trip = request.args.get("trip", "one-way")
@@ -74,47 +79,156 @@ def create_app(config: dict | None = None) -> Flask:
         max_stops = _optional_int(request.args.get("max_stops"))
         cache_days = int(request.args.get("cache_days", app.config["CACHE_DAYS"]))
 
+        from_airports = _parse_airports(from_airports_text)
+        to_airports = _parse_airports(to_airports_text)
+        dates = _date_range(date_from, date_to or date_from)
+
         error = None
-        result = None
+        results = []
+        csv_url = None
         try:
-            result = search_flights(
-                from_airport=from_airport,
-                to_airport=to_airport,
-                date=date,
-                trip=trip,
-                seat=seat,
-                adults=adults,
-                children=children,
-                max_stops=max_stops,
-                cache_days=cache_days,
-            )
+            for from_airport in from_airports:
+                for to_airport in to_airports:
+                    for date in dates:
+                        result = search_flights(
+                            from_airport=from_airport,
+                            to_airport=to_airport,
+                            date=date,
+                            trip=trip,
+                            seat=seat,
+                            adults=adults,
+                            children=children,
+                            max_stops=max_stops,
+                            cache_days=cache_days,
+                        )
+                        results.append(
+                            {
+                                "from_airport": from_airport,
+                                "to_airport": to_airport,
+                                "date": date,
+                                "result": result,
+                            }
+                        )
+
+            if results:
+                csv_url = url_for(
+                    "download_csv",
+                    from_airports=from_airports_text,
+                    to_airports=to_airports_text,
+                    date_from=date_from,
+                    date_to=date_to or date_from,
+                    trip=trip,
+                    seat=seat,
+                    adults=adults,
+                    children=children,
+                    max_stops=max_stops,
+                    cache_days=cache_days,
+                )
         except Exception as exc:  # noqa: BLE001
             error = str(exc)
 
         return render_template(
             "results.html",
-            result=result,
+            results=results,
             error=error,
-            from_airport=from_airport,
-            to_airport=to_airport,
-            date=date,
+            from_airports_text=from_airports_text,
+            to_airports_text=to_airports_text,
+            date_from=date_from,
+            date_to=date_to or date_from,
             trip=trip,
             seat=seat,
             adults=adults,
             children=children,
             max_stops=max_stops,
             cache_days=cache_days,
+            csv_url=csv_url,
+        )
+
+    @app.route("/search.csv")
+    def download_csv():
+        from_airports = _parse_airports(request.args.get("from_airports", ""))
+        to_airports = _parse_airports(request.args.get("to_airports", ""))
+        date_from = request.args.get("date_from", "")
+        date_to = request.args.get("date_to", date_from)
+        dates = _date_range(date_from, date_to)
+
+        trip = request.args.get("trip", "one-way")
+        seat = request.args.get("seat", "economy")
+        adults = int(request.args.get("adults", 1))
+        children = int(request.args.get("children", 0))
+        max_stops = _optional_int(request.args.get("max_stops"))
+        cache_days = int(request.args.get("cache_days", app.config["CACHE_DAYS"]))
+
+        buffer = StringIO()
+        fieldnames = [
+            "search_date",
+            "from_airport",
+            "to_airport",
+            "airline",
+            "departure",
+            "arrival",
+            "duration",
+            "stops",
+            "delay",
+            "price",
+            "is_best",
+            "current_price",
+            "from_cache",
+            "cached_at",
+        ]
+        writer = DictWriter(buffer, fieldnames=fieldnames)
+        writer.writeheader()
+
+        for from_airport in from_airports:
+            for to_airport in to_airports:
+                for flight_date in dates:
+                    result = search_flights(
+                        from_airport=from_airport,
+                        to_airport=to_airport,
+                        date=flight_date,
+                        trip=trip,
+                        seat=seat,
+                        adults=adults,
+                        children=children,
+                        max_stops=max_stops,
+                        cache_days=cache_days,
+                    )
+                    for flight in result["flights"]:
+                        writer.writerow(
+                            {
+                                "search_date": flight_date,
+                                "from_airport": from_airport,
+                                "to_airport": to_airport,
+                                "airline": flight["name"],
+                                "departure": flight["departure"],
+                                "arrival": flight["arrival"],
+                                "duration": flight["duration"],
+                                "stops": flight["stops"],
+                                "delay": flight["delay"] or "",
+                                "price": flight["price"],
+                                "is_best": flight["is_best"],
+                                "current_price": result["current_price"],
+                                "from_cache": result["from_cache"],
+                                "cached_at": result["cached_at"],
+                            }
+                        )
+
+        return Response(
+            buffer.getvalue(),
+            mimetype="text/csv",
+            headers={"Content-Disposition": "attachment; filename=flight_results.csv"},
         )
 
     @app.route("/api/search")
     def api_search():
         """JSON endpoint – same parameters as the GET /search route."""
-        from_airport = request.args.get("from_airport", "").strip().upper()
-        to_airport = request.args.get("to_airport", "").strip().upper()
-        date = request.args.get("date", "")
-
-        if not (from_airport and to_airport and date):
-            return jsonify({"error": "from_airport, to_airport and date are required"}), 400
+        from_airports = _parse_airports(request.args.get("from_airports", ""))
+        to_airports = _parse_airports(request.args.get("to_airports", ""))
+        date_from = request.args.get("date_from", "")
+        date_to = request.args.get("date_to", date_from)
+        if not (from_airports and to_airports and date_from):
+            return jsonify({"error": "from_airports, to_airports and date_from are required"}), 400
+        dates = _date_range(date_from, date_to)
 
         trip = request.args.get("trip", "one-way")
         seat = request.args.get("seat", "economy")
@@ -124,21 +238,33 @@ def create_app(config: dict | None = None) -> Flask:
         cache_days = int(request.args.get("cache_days", app.config["CACHE_DAYS"]))
 
         try:
-            result = search_flights(
-                from_airport=from_airport,
-                to_airport=to_airport,
-                date=date,
-                trip=trip,
-                seat=seat,
-                adults=adults,
-                children=children,
-                max_stops=max_stops,
-                cache_days=cache_days,
-            )
+            results = []
+            for from_airport in from_airports:
+                for to_airport in to_airports:
+                    for date in dates:
+                        result = search_flights(
+                            from_airport=from_airport,
+                            to_airport=to_airport,
+                            date=date,
+                            trip=trip,
+                            seat=seat,
+                            adults=adults,
+                            children=children,
+                            max_stops=max_stops,
+                            cache_days=cache_days,
+                        )
+                        results.append(
+                            {
+                                "from_airport": from_airport,
+                                "to_airport": to_airport,
+                                "date": date,
+                                "result": result,
+                            }
+                        )
         except Exception as exc:  # noqa: BLE001
             return jsonify({"error": str(exc)}), 500
 
-        return jsonify(result)
+        return jsonify({"results": results})
 
     return app
 
@@ -155,6 +281,24 @@ def _optional_int(value: str | None) -> int | None:
         return int(value)
     except ValueError:
         return None
+
+
+def _parse_airports(value: str) -> list[str]:
+    airports = [code.strip().upper() for code in value.split(",") if code.strip()]
+    unique: list[str] = []
+    for code in airports:
+        if re.fullmatch(r"[A-Z]{3}", code) and code not in unique:
+            unique.append(code)
+    return unique
+
+
+def _date_range(start: str, end: str) -> list[str]:
+    start_date = dt_date.fromisoformat(start)
+    end_date = dt_date.fromisoformat(end)
+    if end_date < start_date:
+        raise ValueError("date_to must be on or after date_from")
+    days = (end_date - start_date).days
+    return [(start_date + timedelta(days=offset)).isoformat() for offset in range(days + 1)]
 
 
 # ------------------------------------------------------------------ #

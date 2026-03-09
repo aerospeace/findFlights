@@ -6,12 +6,19 @@
 <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4">
   <h2 class="h5 mb-0">
     <i class="bi bi-airplane me-2 text-primary"></i>
-    {{ from_airport }} → {{ to_airport }}
-    <span class="text-muted fw-normal">· {{ date }} · {{ seat|title }} · {{ trip|replace('-',' ')|title }}</span>
+    {{ from_airports_text }} → {{ to_airports_text }}
+    <span class="text-muted fw-normal">· {{ date_from }}{% if date_to != date_from %} to {{ date_to }}{% endif %} · {{ seat|title }} · {{ trip|replace('-',' ')|title }}</span>
   </h2>
-  <a href="{{ url_for('index') }}" class="btn btn-outline-primary btn-sm">
-    <i class="bi bi-arrow-left me-1"></i>New search
-  </a>
+  <div class="d-flex gap-2">
+    {% if csv_url %}
+      <a href="{{ csv_url }}" class="btn btn-success btn-sm">
+        <i class="bi bi-download me-1"></i>Download CSV
+      </a>
+    {% endif %}
+    <a href="{{ url_for('index') }}" class="btn btn-outline-primary btn-sm">
+      <i class="bi bi-arrow-left me-1"></i>New search
+    </a>
+  </div>
 </div>
 
 {% if error %}
@@ -19,28 +26,7 @@
     <i class="bi bi-exclamation-triangle-fill me-2"></i>
     <strong>Could not fetch flights:</strong> {{ error }}
   </div>
-{% elif result %}
-  <!-- Cache notice -->
-  {% if result.from_cache %}
-    <div class="alert alert-info py-2 d-flex align-items-center gap-2" role="alert">
-      <i class="bi bi-database-check"></i>
-      <span>Results served from cache
-        (cached at {{ result.cached_at[:19]|replace('T',' ') }} UTC).</span>
-    </div>
-  {% endif %}
-
-  <!-- Price indicator -->
-  {% if result.current_price %}
-    <div class="mb-3">
-      <span class="badge rounded-pill
-        {% if result.current_price == 'low' %}bg-success
-        {% elif result.current_price == 'high' %}bg-danger
-        {% else %}bg-warning text-dark{% endif %} fs-6">
-        <i class="bi bi-tag-fill me-1"></i>
-        Price level: {{ result.current_price|title }}
-      </span>
-    </div>
-  {% endif %}
+{% elif results %}
 
   <!-- Filters -->
   <div class="card bg-light mb-4 border-0">
@@ -88,20 +74,46 @@
 
   <!-- Flight count -->
   <p class="text-muted small mb-2">
-    <span id="visibleCount">{{ result.flights|length }}</span>
-    of {{ result.flights|length }} flight(s) shown
+    <span id="visibleCount">{{ results | map(attribute='result.flights') | map('length') | sum }}</span>
+    of {{ results | map(attribute='result.flights') | map('length') | sum }} flight(s) shown
   </p>
 
   <!-- Flight cards -->
-  {% if result.flights %}
+  {% set total_flights = results | map(attribute='result.flights') | map('length') | sum %}
+  {% if total_flights > 0 %}
     <div id="flightList">
-      {% for flight in result.flights %}
+      {% for search_entry in results %}
+        {% set result = search_entry.result %}
+        {% if result.from_cache %}
+          <div class="alert alert-info py-2 d-flex align-items-center gap-2" role="alert">
+            <i class="bi bi-database-check"></i>
+            <span>{{ search_entry.from_airport }} → {{ search_entry.to_airport }} on {{ search_entry.date }} served from cache
+              (cached at {{ result.cached_at[:19]|replace('T',' ') }} UTC).</span>
+          </div>
+        {% endif %}
+
+        {% if result.current_price %}
+          <div class="mb-3">
+            <span class="badge rounded-pill
+              {% if result.current_price == 'low' %}bg-success
+              {% elif result.current_price == 'high' %}bg-danger
+              {% else %}bg-warning text-dark{% endif %} fs-6">
+              <i class="bi bi-tag-fill me-1"></i>
+              {{ search_entry.from_airport }} → {{ search_entry.to_airport }} · {{ search_entry.date }}: {{ result.current_price|title }}
+            </span>
+          </div>
+        {% endif %}
+
+        {% for flight in result.flights %}
         <div class="card mb-3 flight-card shadow-sm
           {% if flight.is_best %}border-success{% endif %}"
           data-airline="{{ flight.name }}"
           data-stops="{{ flight.stops }}"
           data-price="{{ flight.price | numeric_price }}"
-          data-duration="{{ flight.duration }}">
+          data-duration="{{ flight.duration }}"
+          data-from-airport="{{ search_entry.from_airport }}"
+          data-to-airport="{{ search_entry.to_airport }}"
+          data-date="{{ search_entry.date }}">
 
           <div class="card-body">
             <div class="row align-items-center gy-2">
@@ -125,7 +137,7 @@
                 <div class="d-flex align-items-center justify-content-center gap-2">
                   <div>
                     <div class="fs-5 fw-bold">{{ flight.departure }}</div>
-                    <small class="text-muted">{{ from_airport }}</small>
+                    <small class="text-muted">{{ search_entry.from_airport }}</small>
                   </div>
                   <div class="text-muted px-2">
                     <i class="bi bi-arrow-right"></i>
@@ -138,7 +150,8 @@
                         <sup class="text-danger small">+{{ flight.arrival_time_ahead }}</sup>
                       {% endif %}
                     </div>
-                    <small class="text-muted">{{ to_airport }}</small>
+                    <small class="text-muted">{{ search_entry.to_airport }}</small>
+                    <small class="text-muted d-block">{{ search_entry.date }}</small>
                   </div>
                 </div>
               </div>
@@ -168,6 +181,7 @@
             </div>
           </div>
         </div>
+        {% endfor %}
       {% endfor %}
     </div>
     <p id="noResults" class="text-muted text-center py-4 d-none">
@@ -176,7 +190,7 @@
     </p>
   {% else %}
     <div class="alert alert-warning">
-      <i class="bi bi-info-circle-fill me-2"></i>No flights found for this route and date.
+      <i class="bi bi-info-circle-fill me-2"></i>No flights found for this route/date range.
     </div>
   {% endif %}
 {% endif %}
