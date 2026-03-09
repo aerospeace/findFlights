@@ -6,7 +6,7 @@
   <h2 class="h5 mb-0">
     <i class="bi bi-airplane me-2 text-primary"></i>
     {{ from_airports_text }} → {{ to_airports_text }}
-    <span class="text-muted fw-normal">· {{ date_from }}{% if date_to != date_from %} to {{ date_to }}{% endif %} · {{ seat|title }} · {{ trip|replace('-',' ')|title }}</span>
+    <span class="text-muted fw-normal">· {{ date_from|display_date }}{% if date_to != date_from %} to {{ date_to|display_date }}{% endif %} · {{ seat|title }} · {{ trip|replace('-',' ')|title }}</span>
   </h2>
   <div class="d-flex gap-2">
     {% if csv_url %}
@@ -69,14 +69,14 @@
 
   <div id="flightList">
     {% for search_entry in results %}
-      <div class="mb-2 text-muted small"><strong>{{ search_entry.from_airport }} → {{ search_entry.to_airport }}</strong> · {{ search_entry.date }}</div>
+      <div class="mb-2 text-muted small"><strong>{{ search_entry.from_airport }} → {{ search_entry.to_airport }}</strong> · {{ search_entry.date|display_date }}</div>
 
       {% if search_entry.error %}
         <div class="alert alert-danger py-2">
           <i class="bi bi-exclamation-triangle-fill me-1"></i>
           Could not fetch flights for this itinerary: {{ search_entry.error }}
         </div>
-      {% elif not search_entry.result.flights %}
+      {% elif not search_entry.result or not search_entry.result.flights %}
         <div class="alert alert-warning py-2">
           <i class="bi bi-info-circle-fill me-1"></i>
           No flights found for this itinerary.
@@ -107,7 +107,7 @@
                   <div class="d-flex align-items-center justify-content-center gap-2">
                     <div><div class="fs-5 fw-bold">{{ flight.departure }}</div><small class="text-muted">{{ search_entry.from_airport }}</small></div>
                     <div class="text-muted px-2"><i class="bi bi-arrow-right"></i><div class="small">{{ flight.duration }}</div></div>
-                    <div><div class="fs-5 fw-bold">{{ flight.arrival }}</div><small class="text-muted">{{ search_entry.to_airport }}</small><small class="text-muted d-block">{{ search_entry.date }}</small></div>
+                    <div><div class="fs-5 fw-bold">{{ flight.arrival }}</div><small class="text-muted">{{ search_entry.to_airport }}</small><small class="text-muted d-block">{{ search_entry.date|display_date }}</small></div>
                   </div>
                 </div>
                 <div class="col-md-2 text-center">

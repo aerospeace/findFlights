@@ -33,6 +33,10 @@ def create_app(config: dict | None = None) -> Flask:
         """Strip everything except digits and decimal points from a price string."""
         return re.sub(r"[^0-9.]", "", value or "")
 
+    @app.template_filter("display_date")
+    def display_date_filter(value: str) -> str:
+        return _display_date(value)
+
     with app.app_context():
         db.create_all()
 
@@ -51,7 +55,7 @@ def create_app(config: dict | None = None) -> Flask:
                 "from_airports": request.form.get("from_airports", "").strip().upper(),
                 "to_airports": request.form.get("to_airports", "").strip().upper(),
                 "date_from": request.form.get("date_from", ""),
-                "date_to": request.form.get("date_to", ""),
+                "date_to": request.form.get("date_to", "") or request.form.get("date_from", ""),
                 "trip": request.form.get("trip", "one-way"),
                 "seat": request.form.get("seat", "economy"),
                 "adults": int(request.form.get("adults", 1)),
@@ -116,7 +120,7 @@ def create_app(config: dict | None = None) -> Flask:
                                     "to_airport": to_airport,
                                     "date": date,
                                     "result": None,
-                                    "error": str(exc),
+                                    "error": None if _is_no_flights_error(exc) else str(exc),
                                 }
                             )
 
@@ -175,8 +179,10 @@ def create_app(config: dict | None = None) -> Flask:
             "from_airport",
             "to_airport",
             "airline",
-            "departure",
-            "arrival",
+            "departure_date",
+            "departure_time",
+            "arrival_date",
+            "arrival_time",
             "duration",
             "stops",
             "delay",
@@ -188,6 +194,7 @@ def create_app(config: dict | None = None) -> Flask:
             "status",
             "error_message",
             "no_results",
+            "representation",
         ]
         writer = DictWriter(buffer, fieldnames=fieldnames)
         writer.writeheader()
@@ -208,6 +215,19 @@ def create_app(config: dict | None = None) -> Flask:
                             cache_days=cache_days,
                         )
                     except Exception as exc:  # noqa: BLE001
+                        if _is_no_flights_error(exc):
+                            writer.writerow(
+                                {
+                                    "search_date": flight_date,
+                                    "from_airport": from_airport,
+                                    "to_airport": to_airport,
+                                    "status": "ok",
+                                    "error_message": "",
+                                    "no_results": "true",
+                                    "representation": f"No flights found / {from_airport}, {_display_date(flight_date)} -> {to_airport}",
+                                }
+                            )
+                            continue
                         writer.writerow(
                             {
                                 "search_date": flight_date,
@@ -231,6 +251,7 @@ def create_app(config: dict | None = None) -> Flask:
                                 "status": "ok",
                                 "error_message": "",
                                 "no_results": "true",
+                                "representation": f"No flights found / {from_airport}, {_display_date(flight_date)} -> {to_airport}",
                             }
                         )
                         continue
@@ -242,8 +263,10 @@ def create_app(config: dict | None = None) -> Flask:
                                 "from_airport": from_airport,
                                 "to_airport": to_airport,
                                 "airline": flight["name"],
-                                "departure": _excel_datetime(flight["departure"], flight_date),
-                                "arrival": _excel_datetime(flight["arrival"], flight_date),
+                                "departure_date": _excel_date(flight["departure"], flight_date),
+                                "departure_time": _excel_time(flight["departure"], flight_date),
+                                "arrival_date": _excel_date(flight["arrival"], flight_date),
+                                "arrival_time": _excel_time(flight["arrival"], flight_date),
                                 "duration": _excel_duration(flight["duration"]),
                                 "stops": flight["stops"],
                                 "delay": flight["delay"] or "",
@@ -255,6 +278,15 @@ def create_app(config: dict | None = None) -> Flask:
                                 "status": "ok",
                                 "error_message": "",
                                 "no_results": "false",
+                                "representation": _representation(
+                                    airline=flight["name"],
+                                    from_airport=from_airport,
+                                    to_airport=to_airport,
+                                    departure=flight["departure"],
+                                    arrival=flight["arrival"],
+                                    fallback_date=flight_date,
+                                    price=_normalized_price(flight["price"]),
+                                ),
                             }
                         )
 
@@ -314,7 +346,7 @@ def create_app(config: dict | None = None) -> Flask:
                                 "to_airport": to_airport,
                                 "date": date,
                                 "result": None,
-                                "error": str(exc),
+                                "error": None if _is_no_flights_error(exc) else str(exc),
                             }
                         )
 
@@ -385,6 +417,55 @@ def _excel_duration(value: str) -> str:
     hours = int(hour_match.group(1)) if hour_match else 0
     minutes = int(minute_match.group(1)) if minute_match else 0
     return f"{hours:02d}:{minutes:02d}"
+
+
+def _excel_date(value: str, fallback_date: str) -> str:
+    dt_val = _parse_time_on_date(value, fallback_date)
+    return dt_val.strftime("%Y-%m-%d") if dt_val else dt_date.fromisoformat(fallback_date).strftime("%Y-%m-%d")
+
+
+def _excel_time(value: str, fallback_date: str) -> str:
+    dt_val = _parse_time_on_date(value, fallback_date)
+    return dt_val.strftime("%H:%M") if dt_val else ""
+
+
+def _parse_time_on_date(value: str, fallback_date: str) -> datetime | None:
+    cleaned = (value or "").strip()
+    match = re.search(r"(\d{1,2}:\d{2}\s*[AP]M)\s+on\s+\w{3},\s+(\w{3})\s+(\d{1,2})", cleaned)
+    if not match:
+        return None
+    time_part, month_part, day_part = match.groups()
+    fallback = dt_date.fromisoformat(fallback_date)
+    return datetime.strptime(
+        f"{fallback.year} {month_part} {day_part} {time_part.upper()}",
+        "%Y %b %d %I:%M %p",
+    )
+
+
+def _representation(
+    airline: str,
+    from_airport: str,
+    to_airport: str,
+    departure: str,
+    arrival: str,
+    fallback_date: str,
+    price: str,
+) -> str:
+    dep = _excel_datetime(departure, fallback_date)
+    arr = _excel_datetime(arrival, fallback_date)
+    return f"{airline} / {from_airport}, {dep} -> {to_airport}, {arr} / {price}"
+
+
+def _is_no_flights_error(exc: Exception) -> bool:
+    msg = str(exc).lower()
+    return "no flights found" in msg
+
+
+def _display_date(value: str) -> str:
+    try:
+        return dt_date.fromisoformat(value).strftime("%d/%m/%Y")
+    except ValueError:
+        return value
 
 
 # ------------------------------------------------------------------ #

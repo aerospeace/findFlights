@@ -11,19 +11,12 @@
         </h1>
 
         <form method="post" action="{{ url_for('search') }}" id="searchForm">
-          <!-- Airports -->
           <div class="row g-3 mb-3">
             <div class="col-md-6">
               <label for="from_airports" class="form-label fw-semibold">From</label>
               <div class="input-group">
                 <span class="input-group-text"><i class="bi bi-geo-alt"></i></span>
-                <input type="text"
-                       class="form-control text-uppercase"
-                       id="from_airports"
-                       name="from_airports"
-                       placeholder="e.g. JFK, EWR"
-                       title="Comma-separated 3-letter IATA airport codes"
-                       required>
+                <input type="text" class="form-control text-uppercase" id="from_airports" name="from_airports" placeholder="e.g. JFK, EWR" title="Comma-separated 3-letter IATA airport codes" required>
               </div>
               <div class="form-text">One or more 3-letter IATA codes, comma-separated</div>
             </div>
@@ -31,40 +24,25 @@
               <label for="to_airports" class="form-label fw-semibold">To</label>
               <div class="input-group">
                 <span class="input-group-text"><i class="bi bi-geo"></i></span>
-                <input type="text"
-                       class="form-control text-uppercase"
-                       id="to_airports"
-                       name="to_airports"
-                       placeholder="e.g. LAX, SFO"
-                       title="Comma-separated 3-letter IATA airport codes"
-                       required>
+                <input type="text" class="form-control text-uppercase" id="to_airports" name="to_airports" placeholder="e.g. LAX, SFO" title="Comma-separated 3-letter IATA airport codes" required>
               </div>
               <div class="form-text">One or more 3-letter IATA codes, comma-separated</div>
             </div>
           </div>
 
-          <!-- Date & Trip type -->
           <div class="row g-3 mb-3">
             <div class="col-md-6">
               <label for="date_from" class="form-label fw-semibold">Departure date from</label>
               <div class="input-group">
                 <span class="input-group-text"><i class="bi bi-calendar3"></i></span>
-                <input type="date"
-                       class="form-control"
-                       id="date_from"
-                       name="date_from"
-                       required>
+                <input type="date" class="form-control" id="date_from" name="date_from" required>
               </div>
             </div>
             <div class="col-md-6">
               <label for="date_to" class="form-label fw-semibold">Departure date to</label>
               <div class="input-group">
                 <span class="input-group-text"><i class="bi bi-calendar-range"></i></span>
-                <input type="date"
-                       class="form-control"
-                       id="date_to"
-                       name="date_to"
-                       required>
+                <input type="date" class="form-control" id="date_to" name="date_to">
               </div>
             </div>
             <div class="col-md-12">
@@ -77,7 +55,6 @@
             </div>
           </div>
 
-          <!-- Seat & Passengers -->
           <div class="row g-3 mb-3">
             <div class="col-md-4">
               <label for="seat" class="form-label fw-semibold">Cabin class</label>
@@ -90,20 +67,16 @@
             </div>
             <div class="col-md-4">
               <label for="adults" class="form-label fw-semibold">Adults</label>
-              <input type="number" class="form-control" id="adults" name="adults"
-                     min="1" max="9" value="1">
+              <input type="number" class="form-control" id="adults" name="adults" min="1" max="9" value="1">
             </div>
             <div class="col-md-4">
               <label for="children" class="form-label fw-semibold">Children</label>
-              <input type="number" class="form-control" id="children" name="children"
-                     min="0" max="9" value="0">
+              <input type="number" class="form-control" id="children" name="children" min="0" max="9" value="0">
             </div>
           </div>
 
-          <!-- Advanced options (collapsed by default) -->
           <div class="mb-3">
-            <a class="text-decoration-none small" data-bs-toggle="collapse"
-               href="#advancedOptions" role="button">
+            <a class="text-decoration-none small" data-bs-toggle="collapse" href="#advancedOptions" role="button">
               <i class="bi bi-sliders me-1"></i>Advanced options
             </a>
             <div class="collapse" id="advancedOptions">
@@ -119,15 +92,8 @@
                     </select>
                   </div>
                   <div class="col-md-6">
-                    <label for="cache_days" class="form-label">
-                      Cache freshness (days)
-                    </label>
-                    <input type="number" class="form-control" id="cache_days"
-                           name="cache_days" min="0" max="30" value="1">
-                    <div class="form-text">
-                      Use cached results if they are less than this many days old.
-                      Set to 0 to always fetch live data.
-                    </div>
+                    <label for="cache_days" class="form-label">Cache freshness (days)</label>
+                    <input type="number" class="form-control" id="cache_days" name="cache_days" min="0" max="30" value="1">
                   </div>
                 </div>
               </div>
@@ -135,11 +101,17 @@
           </div>
 
           <div class="d-grid">
-            <button type="submit" class="btn btn-primary btn-lg">
-              <i class="bi bi-search me-2"></i>Search flights
+            <button type="submit" class="btn btn-primary btn-lg" id="searchSubmitBtn">
+              <i class="bi bi-search me-2" id="searchIcon"></i>
+              <span id="searchBtnLabel">Search flights</span>
+              <span id="searchSpinner" class="spinner-border spinner-border-sm ms-2 d-none" role="status" aria-hidden="true"></span>
             </button>
           </div>
         </form>
+
+        <div class="alert alert-info mt-3 d-none" id="searchLoadingNotice">
+          <i class="bi bi-hourglass-split me-2"></i>Searching itineraries… this can take a moment.
+        </div>
       </div>
     </div>
   </div>
@@ -148,13 +120,54 @@
 
 {% block scripts %}
 <script>
-  // Set min date to today
-  document.getElementById('date').min = new Date().toISOString().split('T')[0];
-  // Auto-uppercase airport codes
-  ['from_airport','to_airport'].forEach(id => {
-    document.getElementById(id).addEventListener('input', function() {
+(function () {
+  const dateFrom = document.getElementById('date_from');
+  const dateTo = document.getElementById('date_to');
+  const form = document.getElementById('searchForm');
+
+  function todayIso() {
+    return new Date().toISOString().split('T')[0];
+  }
+
+  function syncDateConstraints() {
+    if (!dateFrom || !dateTo) return;
+    dateFrom.min = todayIso();
+    if (dateFrom.value) {
+      dateTo.min = dateFrom.value;
+      if (!dateTo.value || dateTo.value < dateFrom.value) {
+        dateTo.value = dateFrom.value;
+      }
+    } else {
+      dateTo.min = todayIso();
+    }
+  }
+
+  ['from_airports', 'to_airports'].forEach(id => {
+    const el = document.getElementById(id);
+    el?.addEventListener('input', function () {
       this.value = this.value.toUpperCase();
     });
   });
+
+  if (dateFrom && !dateFrom.value) {
+    dateFrom.value = todayIso();
+  }
+  syncDateConstraints();
+
+  dateFrom?.addEventListener('change', syncDateConstraints);
+  dateTo?.addEventListener('focus', syncDateConstraints);
+
+  form?.addEventListener('submit', () => {
+    if (dateFrom?.value && !dateTo?.value) {
+      dateTo.value = dateFrom.value;
+    }
+    document.getElementById('searchSpinner')?.classList.remove('d-none');
+    document.getElementById('searchLoadingNotice')?.classList.remove('d-none');
+    const label = document.getElementById('searchBtnLabel');
+    if (label) label.textContent = 'Searching...';
+    const submitBtn = document.getElementById('searchSubmitBtn');
+    if (submitBtn) submitBtn.disabled = true;
+  });
+})();
 </script>
 {% endblock %}

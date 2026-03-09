@@ -14,6 +14,7 @@ from app import (
     _date_range,
     _excel_datetime,
     _excel_duration,
+    _is_no_flights_error,
     _normalized_price,
     _parse_airports,
     create_app,
@@ -242,7 +243,7 @@ class TestRoutes:
                 "from_airports": "JFK",
                 "to_airports": "LAX",
                 "date_from": "2025-06-01",
-                "date_to": "2025-06-01",
+                "date_to": "",
                 "trip": "one-way",
                 "seat": "economy",
                 "adults": "1",
@@ -253,6 +254,7 @@ class TestRoutes:
         location = response.headers["Location"]
         assert "from_airports=JFK" in location
         assert "to_airports=LAX" in location
+        assert "date_to=2025-06-01" in location
 
     def test_search_get_returns_results(self, client, app):
         mock_result = _make_mock_result()
@@ -353,6 +355,9 @@ class TestRoutes:
         assert response.status_code == 200
         assert response.mimetype == "text/csv"
         assert b"search_date,from_airport,to_airport" in response.data
+        assert b"representation" in response.data
+        assert b"departure_date" in response.data
+        assert b"departure_time" in response.data
 
     def test_search_continues_when_one_itinerary_fails(self, client, app):
         mock_result = _make_mock_result()
@@ -397,6 +402,39 @@ class TestRoutes:
         assert "no_results" in data
         assert "true" in data
 
+    def test_csv_includes_row_for_no_flights_exception(self, client, app):
+        with patch("flights_service.get_flights", side_effect=RuntimeError("No flights found: Skip to main content")):
+            with app.app_context():
+                response = client.get(
+                    "/search.csv",
+                    query_string={
+                        "from_airports": "JFK",
+                        "to_airports": "LAX",
+                        "date_from": "2025-06-01",
+                        "date_to": "2025-06-01",
+                    },
+                )
+
+        data = response.data.decode()
+        assert "no_results" in data
+        assert "true" in data
+
+    def test_search_shows_no_flights_message_instead_of_html_error(self, client, app):
+        with patch("app.search_flights", side_effect=RuntimeError("No flights found: Skip to main content <html>...")):
+            with app.app_context():
+                response = client.get(
+                    "/search",
+                    query_string={
+                        "from_airports": "JFK",
+                        "to_airports": "LAX",
+                        "date_from": "2025-06-01",
+                        "date_to": "2025-06-01",
+                    },
+                )
+
+        assert b"No flights found for this itinerary" in response.data
+        assert b"Could not fetch flights for this itinerary" not in response.data
+
 
 class TestSearchHelpers:
     def test_parse_airports(self):
@@ -413,3 +451,6 @@ class TestSearchHelpers:
 
     def test_excel_duration(self):
         assert _excel_duration("2 hr 55 min") == "02:55"
+
+    def test_no_flights_error_detection(self):
+        assert _is_no_flights_error(RuntimeError("No flights found: Skip to main content")) is True
