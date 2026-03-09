@@ -1,3 +1,4 @@
 flask>=3.0.0
 flask-sqlalchemy>=3.1.0
-fast-flights>=2.2
+fast-flights==3.0rc0
+# pip install git+https://github.com/AWeirdDev/flights'

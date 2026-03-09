@@ -3,11 +3,29 @@ import json
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fast_flights import FlightData, Passengers, get_flights
+from fast_flights import FlightQuery as FastFlightQuery, Passengers, create_query, get_flights
 
-from models import FlightQuery, db
+from models import FlightQuery as CachedFlightQuery, db
 
 CACHE_DAYS_DEFAULT = 1
+
+
+def _format_hhmm(value: tuple[int, int] | str | None) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    h, m = value
+    return f"{h:02d}:{m:02d}"
+
+
+def _format_duration(value: int | str | None) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    hours, mins = divmod(value, 60)
+    return f"{hours}h {mins:02d}m"
 
 
 def _make_query_hash(
@@ -37,18 +55,107 @@ def _make_query_hash(
     return hashlib.sha256(payload.encode()).hexdigest()
 
 
-def _flight_to_dict(flight) -> dict:
+def _normalize_new_flight(flight) -> dict:
+    segments = list(getattr(flight, "flights", []) or [])
+    first_segment = segments[0] if segments else None
+    last_segment = segments[-1] if segments else None
+
+    departure = _format_hhmm(getattr(getattr(first_segment, "departure", None), "time", None))
+    arrival = _format_hhmm(getattr(getattr(last_segment, "arrival", None), "time", None))
+
+    arrival_time_ahead = ""
+    dep_date = getattr(getattr(first_segment, "departure", None), "date", None)
+    arr_date = getattr(getattr(last_segment, "arrival", None), "date", None)
+    if dep_date and arr_date and dep_date != arr_date:
+        try:
+            dep_dt = datetime(*dep_date)
+            arr_dt = datetime(*arr_date)
+            day_diff = (arr_dt.date() - dep_dt.date()).days
+            if day_diff > 0:
+                arrival_time_ahead = str(day_diff)
+        except (TypeError, ValueError):
+            arrival_time_ahead = ""
+
+    airlines = list(getattr(flight, "airlines", []) or [])
+    raw_price = getattr(flight, "price", None)
+    if isinstance(raw_price, int):
+        price = f"${raw_price:,}"
+    else:
+        price = str(raw_price) if raw_price is not None else ""
+
     return {
-        "is_best": flight.is_best,
-        "name": flight.name,
-        "departure": flight.departure,
-        "arrival": flight.arrival,
-        "arrival_time_ahead": flight.arrival_time_ahead,
-        "duration": flight.duration,
-        "stops": flight.stops,
-        "delay": flight.delay,
-        "price": flight.price,
+        "is_best": getattr(flight, "type", "") == "best",
+        "name": ", ".join(airlines) if airlines else "Unknown Airline",
+        "departure": departure,
+        "arrival": arrival,
+        "arrival_time_ahead": arrival_time_ahead,
+        "duration": _format_duration(getattr(flight, "duration", None)),
+        "stops": max(len(segments) - 1, 0),
+        "delay": None,
+        "price": price,
     }
+
+
+def _flight_to_dict(flight) -> dict:
+    # Backward-compatible mapping for old fast_flights models used in tests.
+    if hasattr(flight, "is_best") and hasattr(flight, "departure"):
+        return {
+            "is_best": flight.is_best,
+            "name": flight.name,
+            "departure": flight.departure,
+            "arrival": flight.arrival,
+            "arrival_time_ahead": flight.arrival_time_ahead,
+            "duration": flight.duration,
+            "stops": flight.stops,
+            "delay": flight.delay,
+            "price": flight.price,
+        }
+
+    # New fast_flights models.
+    return _normalize_new_flight(flight)
+
+
+def _result_to_payload(result) -> dict:
+    # Old shape: object with .flights and .current_price
+    if hasattr(result, "flights"):
+        flights = list(result.flights)
+        current_price = getattr(result, "current_price", None)
+    else:
+        # New shape: list-like MetaList[Flights]
+        flights = list(result or [])
+        current_price = None
+
+    return {
+        "flights": [_flight_to_dict(f) for f in flights],
+        "current_price": current_price,
+    }
+
+
+def _fetch_flights_compat(
+    from_airport: str,
+    to_airport: str,
+    date: str,
+    trip: str,
+    seat: str,
+    adults: int,
+    children: int,
+    max_stops: Optional[int],
+):
+    query = create_query(
+        flights=[
+            FastFlightQuery(
+                date=date,
+                from_airport=from_airport,
+                to_airport=to_airport,
+                max_stops=max_stops,
+            )
+        ],
+        trip=trip,
+        passengers=Passengers(adults=adults, children=children),
+        seat=seat,
+        max_stops=max_stops,
+    )
+    return get_flights(query)
 
 
 def search_flights(
@@ -84,10 +191,10 @@ def search_flights(
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=cache_days)
 
-    cached: Optional[FlightQuery] = (
-        FlightQuery.query.filter_by(query_hash=query_hash)
-        .filter(FlightQuery.timestamp >= cutoff)
-        .order_by(FlightQuery.timestamp.desc())
+    cached: Optional[CachedFlightQuery] = (
+        CachedFlightQuery.query.filter_by(query_hash=query_hash)
+        .filter(CachedFlightQuery.timestamp >= cutoff)
+        .order_by(CachedFlightQuery.timestamp.desc())
         .first()
     )
 
@@ -97,27 +204,20 @@ def search_flights(
         data["cached_at"] = cached.timestamp.isoformat()
         return data
 
-    result = get_flights(
-        flight_data=[
-            FlightData(
-                date=date,
-                from_airport=from_airport,
-                to_airport=to_airport,
-                max_stops=max_stops,
-            )
-        ],
+    result = _fetch_flights_compat(
+        from_airport=from_airport,
+        to_airport=to_airport,
+        date=date,
         trip=trip,
-        passengers=Passengers(adults=adults, children=children),
         seat=seat,
+        adults=adults,
+        children=children,
+        max_stops=max_stops,
     )
 
-    flights_list = [_flight_to_dict(f) for f in result.flights]
-    payload = {
-        "flights": flights_list,
-        "current_price": result.current_price,
-    }
+    payload = _result_to_payload(result)
 
-    record = FlightQuery(
+    record = CachedFlightQuery(
         query_hash=query_hash,
         from_airport=from_airport,
         to_airport=to_airport,
