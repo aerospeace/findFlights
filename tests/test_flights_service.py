@@ -484,3 +484,16 @@ class TestSearchHelpers:
             price="123.45",
         )
         assert text.endswith("123.45€")
+
+
+class TestAppConfig:
+    def test_uses_environment_defaults(self, monkeypatch):
+        monkeypatch.setenv("SQLITE_DB_PATH", "/tmp/my-db.sqlite")
+        monkeypatch.setenv("CACHE_DAYS", "7")
+        monkeypatch.setenv("SECRET_KEY", "my-secret")
+
+        application = create_app()
+
+        assert application.config["SQLALCHEMY_DATABASE_URI"] == "sqlite:////tmp/my-db.sqlite"
+        assert application.config["CACHE_DAYS"] == 7
+        assert application.config["SECRET_KEY"] == "my-secret"

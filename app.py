@@ -15,13 +15,16 @@ BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 def create_app(config: dict | None = None) -> Flask:
     app = Flask(__name__)
 
+    sqlite_path = os.environ.get("SQLITE_DB_PATH", os.path.join(BASE_DIR, "findflights.db"))
+    default_cache_days = int(os.environ.get("CACHE_DAYS", "1"))
+    default_secret_key = os.environ.get("SECRET_KEY", "change-me-in-prod")
+
     app.config.setdefault(
         "SQLALCHEMY_DATABASE_URI",
-        f"sqlite:///{os.path.join(BASE_DIR, 'findflights.db')}",
+        f"sqlite:///{sqlite_path}",
     )
-    app.config.setdefault("SQLALCHEMY_TRACK_MODIFICATIONS", False)
-    app.config.setdefault("CACHE_DAYS", 1)
-    app.config.setdefault("SECRET_KEY", os.environ.get("SECRET_KEY", "change-me-in-prod"))
+    app.config.setdefault("CACHE_DAYS", default_cache_days)
+    app.config["SECRET_KEY"] = app.config.get("SECRET_KEY") or default_secret_key
 
     if config:
         app.config.update(config)

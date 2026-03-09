@@ -32,15 +32,15 @@
         <div class="col-auto fw-semibold"><i class="bi bi-funnel me-1"></i>Filter:</div>
         <div class="col-md-2">
           <label for="filterDate" class="form-label form-label-sm mb-1">Departure date</label>
-          <input type="date" class="form-control form-control-sm" id="filterDate">
+          <select class="form-select form-select-sm" id="filterDate" multiple size="3"></select>
         </div>
         <div class="col-md-2">
           <label for="filterFromAirport" class="form-label form-label-sm mb-1">From</label>
-          <input type="text" class="form-control form-control-sm text-uppercase" id="filterFromAirport" placeholder="JFK">
+          <select class="form-select form-select-sm" id="filterFromAirport" multiple size="3"></select>
         </div>
         <div class="col-md-2">
           <label for="filterToAirport" class="form-label form-label-sm mb-1">To</label>
-          <input type="text" class="form-control form-control-sm text-uppercase" id="filterToAirport" placeholder="LAX">
+          <select class="form-select form-select-sm" id="filterToAirport" multiple size="3"></select>
         </div>
         <div class="col-md-2">
           <label for="filterAirline" class="form-label form-label-sm mb-1">Airline</label>
@@ -140,6 +140,9 @@
 (function () {
   const cards = Array.from(document.querySelectorAll('.flight-card'));
   const airlineSelect = document.getElementById('filterAirline');
+  const dateSelect = document.getElementById('filterDate');
+  const fromSelect = document.getElementById('filterFromAirport');
+  const toSelect = document.getElementById('filterToAirport');
 
   if (airlineSelect) {
     const airlines = [...new Set(cards.map(c => c.dataset.airline))].sort();
@@ -151,11 +154,30 @@
     });
   }
 
+  function fillMultiSelect(selectEl, values) {
+    if (!selectEl) return;
+    values.forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v;
+      opt.textContent = v;
+      selectEl.appendChild(opt);
+    });
+  }
+
+  fillMultiSelect(dateSelect, [...new Set(cards.map(c => c.dataset.date))].sort());
+  fillMultiSelect(fromSelect, [...new Set(cards.map(c => c.dataset.fromAirport))].sort());
+  fillMultiSelect(toSelect, [...new Set(cards.map(c => c.dataset.toAirport))].sort());
+
+  function selectedValues(selectEl) {
+    if (!selectEl) return [];
+    return Array.from(selectEl.selectedOptions).map(opt => opt.value);
+  }
+
   function applyFilters() {
     const airline = (airlineSelect?.value || '').toLowerCase();
-    const fromAirport = (document.getElementById('filterFromAirport')?.value || '').toLowerCase();
-    const toAirport = (document.getElementById('filterToAirport')?.value || '').toLowerCase();
-    const filterDate = document.getElementById('filterDate')?.value || '';
+    const fromAirports = selectedValues(fromSelect).map(v => v.toLowerCase());
+    const toAirports = selectedValues(toSelect).map(v => v.toLowerCase());
+    const filterDates = selectedValues(dateSelect);
     const maxStops = document.getElementById('filterStops')?.value;
     const maxPrice = parseFloat(document.getElementById('filterMaxPrice')?.value) || Infinity;
     const maxDurHrs = parseFloat(document.getElementById('filterMaxDuration')?.value) || Infinity;
@@ -172,9 +194,9 @@
 
       const ok =
         (!airline || cardAirline.includes(airline)) &&
-        (!fromAirport || cardFrom.includes(fromAirport)) &&
-        (!toAirport || cardTo.includes(toAirport)) &&
-        (!filterDate || cardDate === filterDate) &&
+        (fromAirports.length === 0 || fromAirports.includes(cardFrom)) &&
+        (toAirports.length === 0 || toAirports.includes(cardTo)) &&
+        (filterDates.length === 0 || filterDates.includes(cardDate)) &&
         (maxStops === '' || cardStops <= parseInt(maxStops, 10)) &&
         (isNaN(cardPrice) || cardPrice <= maxPrice) &&
         (cardDurHrs === null || cardDurHrs <= maxDurHrs);
@@ -208,7 +230,14 @@
   document.getElementById('clearFilters')?.addEventListener('click', () => {
     ['filterAirline','filterStops','filterMaxPrice','filterMaxDuration','filterDate','filterFromAirport','filterToAirport'].forEach(id => {
       const el = document.getElementById(id);
-      if (el) el.value = '';
+      if (!el) return;
+      if (el.tagName === 'SELECT' && el.multiple) {
+        Array.from(el.options).forEach(opt => {
+          opt.selected = false;
+        });
+      } else {
+        el.value = '';
+      }
     });
     applyFilters();
   });

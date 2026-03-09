@@ -1,0 +1,16 @@
+version: "3.9"
+
+services:
+  findflights:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      SQLITE_DB_PATH: /data/findflights.db
+      CACHE_DAYS: "1"
+      SECRET_KEY: change-me-in-prod
+    volumes:
+      - findflights_data:/data
+
+volumes:
+  findflights_data:
