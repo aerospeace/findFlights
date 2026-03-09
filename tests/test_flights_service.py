@@ -10,7 +10,14 @@ import pytest
 # Allow importing app modules from parent directory
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from app import _date_range, _parse_airports, create_app
+from app import (
+    _date_range,
+    _excel_datetime,
+    _excel_duration,
+    _normalized_price,
+    _parse_airports,
+    create_app,
+)
 from models import db, FlightQuery
 from flights_service import _make_query_hash, search_flights
 
@@ -347,6 +354,49 @@ class TestRoutes:
         assert response.mimetype == "text/csv"
         assert b"search_date,from_airport,to_airport" in response.data
 
+    def test_search_continues_when_one_itinerary_fails(self, client, app):
+        mock_result = _make_mock_result()
+
+        def side_effect(*, from_airport, **kwargs):
+            if from_airport == "JFK":
+                raise RuntimeError("boom")
+            return mock_result
+
+        with patch("app.search_flights", side_effect=side_effect):
+            with app.app_context():
+                response = client.get(
+                    "/search",
+                    query_string={
+                        "from_airports": "JFK,EWR",
+                        "to_airports": "LAX",
+                        "date_from": "2025-06-01",
+                        "date_to": "2025-06-01",
+                    },
+                )
+
+        assert response.status_code == 200
+        assert b"Could not fetch flights for this itinerary" in response.data
+        assert b"Test Airline" in response.data
+
+    def test_csv_includes_row_when_no_results(self, client, app):
+        mock_result = _make_mock_result()
+        mock_result.flights = []
+        with patch("flights_service.get_flights", return_value=mock_result):
+            with app.app_context():
+                response = client.get(
+                    "/search.csv",
+                    query_string={
+                        "from_airports": "JFK",
+                        "to_airports": "LAX",
+                        "date_from": "2025-06-01",
+                        "date_to": "2025-06-01",
+                    },
+                )
+
+        data = response.data.decode()
+        assert "no_results" in data
+        assert "true" in data
+
 
 class TestSearchHelpers:
     def test_parse_airports(self):
@@ -354,3 +404,12 @@ class TestSearchHelpers:
 
     def test_date_range(self):
         assert _date_range("2025-06-01", "2025-06-03") == ["2025-06-01", "2025-06-02", "2025-06-03"]
+
+    def test_normalized_price(self):
+        assert _normalized_price("€123.45") == "123.45"
+
+    def test_excel_datetime(self):
+        assert _excel_datetime("10:45 AM on Sun, Jul 12\n", "2025-07-10") == "2025-07-12 10:45"
+
+    def test_excel_duration(self):
+        assert _excel_duration("2 hr 55 min") == "02:55"
