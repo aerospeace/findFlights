@@ -10,7 +10,16 @@ import pytest
 # Allow importing app modules from parent directory
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from app import create_app
+from app import (
+    _date_range,
+    _excel_datetime,
+    _excel_duration,
+    _is_no_flights_error,
+    _normalized_price,
+    _parse_airports,
+    _representation,
+    create_app,
+)
 from models import db, FlightQuery
 from flights_service import _make_query_hash, search_flights
 
@@ -224,6 +233,11 @@ class TestRoutes:
         assert response.status_code == 200
         assert b"Search" in response.data
 
+    def test_index_advanced_options_toggle_present(self, client):
+        response = client.get("/")
+        assert b"data-bs-target=\"#advancedOptions\"" in response.data
+        assert b"id=\"advancedOptionsToggle\"" in response.data
+
     def test_search_missing_params_redirects(self, client):
         response = client.get("/search")
         assert response.status_code == 302
@@ -232,9 +246,10 @@ class TestRoutes:
         response = client.post(
             "/search",
             data={
-                "from_airport": "JFK",
-                "to_airport": "LAX",
-                "date": "2025-06-01",
+                "from_airports": "JFK",
+                "to_airports": "LAX",
+                "date_from": "2025-06-01",
+                "date_to": "",
                 "trip": "one-way",
                 "seat": "economy",
                 "adults": "1",
@@ -243,8 +258,9 @@ class TestRoutes:
         )
         assert response.status_code == 302
         location = response.headers["Location"]
-        assert "from_airport=JFK" in location
-        assert "to_airport=LAX" in location
+        assert "from_airports=JFK" in location
+        assert "to_airports=LAX" in location
+        assert "date_to=2025-06-01" in location
 
     def test_search_get_returns_results(self, client, app):
         mock_result = _make_mock_result()
@@ -253,13 +269,30 @@ class TestRoutes:
                 response = client.get(
                     "/search",
                     query_string={
-                        "from_airport": "JFK",
-                        "to_airport": "LAX",
-                        "date": "2025-06-01",
+                        "from_airports": "JFK",
+                        "to_airports": "LAX",
+                        "date_from": "2025-06-01",
+                        "date_to": "2025-06-01",
                     },
                 )
         assert response.status_code == 200
         assert b"Test Airline" in response.data
+
+    def test_results_airline_filter_is_multiselect(self, client, app):
+        mock_result = _make_mock_result()
+        with patch("flights_service.get_flights", return_value=mock_result):
+            with app.app_context():
+                response = client.get(
+                    "/search",
+                    query_string={
+                        "from_airports": "JFK",
+                        "to_airports": "LAX",
+                        "date_from": "2025-06-01",
+                        "date_to": "2025-06-01",
+                    },
+                )
+        assert b"id=\"filterAirline\" multiple" in response.data
+        assert b"airlineValues" in response.data
 
     def test_api_search_missing_params(self, client):
         response = client.get("/api/search")
@@ -274,16 +307,16 @@ class TestRoutes:
                 response = client.get(
                     "/api/search",
                     query_string={
-                        "from_airport": "JFK",
-                        "to_airport": "LAX",
-                        "date": "2025-06-01",
+                        "from_airports": "JFK",
+                        "to_airports": "LAX",
+                        "date_from": "2025-06-01",
+                        "date_to": "2025-06-01",
                     },
                 )
         assert response.status_code == 200
         data = response.get_json()
-        assert "flights" in data
-        assert "current_price" in data
-        assert "from_cache" in data
+        assert "results" in data
+        assert len(data["results"]) == 1
 
     def test_search_shows_cache_notice(self, client, app):
         mock_result = _make_mock_result()
@@ -293,18 +326,195 @@ class TestRoutes:
                 client.get(
                     "/search",
                     query_string={
-                        "from_airport": "JFK",
-                        "to_airport": "LAX",
-                        "date": "2025-06-01",
+                        "from_airports": "JFK",
+                        "to_airports": "LAX",
+                        "date_from": "2025-06-01",
+                        "date_to": "2025-06-01",
                     },
                 )
                 # Second call hits the cache
                 response = client.get(
                     "/search",
                     query_string={
-                        "from_airport": "JFK",
-                        "to_airport": "LAX",
-                        "date": "2025-06-01",
+                        "from_airports": "JFK",
+                        "to_airports": "LAX",
+                        "date_from": "2025-06-01",
+                        "date_to": "2025-06-01",
                     },
                 )
         assert b"cache" in response.data.lower()
+
+    def test_api_search_returns_multiple_results_for_range(self, client, app):
+        mock_result = _make_mock_result()
+        with patch("flights_service.get_flights", return_value=mock_result):
+            with app.app_context():
+                response = client.get(
+                    "/api/search",
+                    query_string={
+                        "from_airports": "JFK,EWR",
+                        "to_airports": "LAX",
+                        "date_from": "2025-06-01",
+                        "date_to": "2025-06-02",
+                    },
+                )
+        assert response.status_code == 200
+        data = response.get_json()
+        assert len(data["results"]) == 4
+
+    def test_search_csv_download(self, client, app):
+        mock_result = _make_mock_result()
+        with patch("flights_service.get_flights", return_value=mock_result):
+            with app.app_context():
+                response = client.get(
+                    "/search.csv",
+                    query_string={
+                        "from_airports": "JFK",
+                        "to_airports": "LAX",
+                        "date_from": "2025-06-01",
+                        "date_to": "2025-06-01",
+                    },
+                )
+        assert response.status_code == 200
+        assert response.mimetype == "text/csv"
+        assert b"search_date,from_airport,to_airport" in response.data
+        assert b"representation" in response.data
+        assert b"departure_date" in response.data
+        assert b"departure_time" in response.data
+
+    def test_search_continues_when_one_itinerary_fails(self, client, app):
+        mock_result = _make_mock_result()
+
+        def side_effect(*, from_airport, **kwargs):
+            if from_airport == "JFK":
+                raise RuntimeError("boom")
+            return mock_result
+
+        with patch("app.search_flights", side_effect=side_effect):
+            with app.app_context():
+                response = client.get(
+                    "/search",
+                    query_string={
+                        "from_airports": "JFK,EWR",
+                        "to_airports": "LAX",
+                        "date_from": "2025-06-01",
+                        "date_to": "2025-06-01",
+                    },
+                )
+
+        assert response.status_code == 200
+        assert b"Could not fetch flights for this itinerary" in response.data
+        assert b"Test Airline" in response.data
+
+    def test_csv_includes_row_when_no_results(self, client, app):
+        mock_result = _make_mock_result()
+        mock_result.flights = []
+        with patch("flights_service.get_flights", return_value=mock_result):
+            with app.app_context():
+                response = client.get(
+                    "/search.csv",
+                    query_string={
+                        "from_airports": "JFK",
+                        "to_airports": "LAX",
+                        "date_from": "2025-06-01",
+                        "date_to": "2025-06-01",
+                    },
+                )
+
+        data = response.data.decode()
+        assert "no_results" in data
+        assert "true" in data
+
+    def test_csv_includes_row_for_no_flights_exception(self, client, app):
+        with patch("flights_service.get_flights", side_effect=RuntimeError("No flights found: Skip to main content")):
+            with app.app_context():
+                response = client.get(
+                    "/search.csv",
+                    query_string={
+                        "from_airports": "JFK",
+                        "to_airports": "LAX",
+                        "date_from": "2025-06-01",
+                        "date_to": "2025-06-01",
+                    },
+                )
+
+        data = response.data.decode()
+        assert "no_results" in data
+        assert "true" in data
+
+    def test_search_shows_no_flights_message_instead_of_html_error(self, client, app):
+        with patch("app.search_flights", side_effect=RuntimeError("No flights found: Skip to main content <html>...")):
+            with app.app_context():
+                response = client.get(
+                    "/search",
+                    query_string={
+                        "from_airports": "JFK",
+                        "to_airports": "LAX",
+                        "date_from": "2025-06-01",
+                        "date_to": "2025-06-01",
+                    },
+                )
+
+        assert b"No flights found for this itinerary" in response.data
+        assert b"Could not fetch flights for this itinerary" not in response.data
+
+    def test_new_search_link_prefills_previous_values(self, client, app):
+        mock_result = _make_mock_result()
+        with patch("flights_service.get_flights", return_value=mock_result):
+            with app.app_context():
+                response = client.get(
+                    "/search",
+                    query_string={
+                        "from_airports": "JFK",
+                        "to_airports": "LAX",
+                        "date_from": "2025-06-01",
+                        "date_to": "2025-06-02",
+                        "trip": "round-trip",
+                        "seat": "business",
+                    },
+                )
+        assert b"/?from_airports=JFK&amp;to_airports=LAX" in response.data
+
+
+class TestSearchHelpers:
+    def test_parse_airports(self):
+        assert _parse_airports("jfk, ewr, ba, JFK") == ["JFK", "EWR"]
+
+    def test_date_range(self):
+        assert _date_range("2025-06-01", "2025-06-03") == ["2025-06-01", "2025-06-02", "2025-06-03"]
+
+    def test_normalized_price(self):
+        assert _normalized_price("€123.45") == "123.45"
+
+    def test_excel_datetime(self):
+        assert _excel_datetime("10:45 AM on Sun, Jul 12\n", "2025-07-10") == "2025-07-12 10:45"
+
+    def test_excel_duration(self):
+        assert _excel_duration("2 hr 55 min") == "02:55"
+
+    def test_no_flights_error_detection(self):
+        assert _is_no_flights_error(RuntimeError("No flights found: Skip to main content")) is True
+
+    def test_representation_appends_euro(self):
+        text = _representation(
+            airline="Air Test",
+            from_airport="JFK",
+            to_airport="LAX",
+            departure="10:45 AM on Sun, Jul 12",
+            arrival="01:45 PM on Sun, Jul 12",
+            fallback_date="2025-07-12",
+            price="123.45",
+        )
+        assert text.endswith("123.45€")
+
+
+class TestAppConfig:
+    def test_uses_environment_defaults(self, monkeypatch):
+        monkeypatch.setenv("SQLITE_DB_PATH", "/tmp/my-db.sqlite")
+        monkeypatch.setenv("CACHE_DAYS", "7")
+        monkeypatch.setenv("SECRET_KEY", "my-secret")
+
+        application = create_app()
+
+        assert application.config["SQLALCHEMY_DATABASE_URI"] == "sqlite:////tmp/my-db.sqlite"
+        assert application.config["CACHE_DAYS"] == 7
+        assert application.config["SECRET_KEY"] == "my-secret"

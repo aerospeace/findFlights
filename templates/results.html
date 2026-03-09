@@ -2,16 +2,22 @@
 {% block title %}FindFlights – Results{% endblock %}
 
 {% block content %}
-<!-- Summary bar -->
 <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4">
   <h2 class="h5 mb-0">
     <i class="bi bi-airplane me-2 text-primary"></i>
-    {{ from_airport }} → {{ to_airport }}
-    <span class="text-muted fw-normal">· {{ date }} · {{ seat|title }} · {{ trip|replace('-',' ')|title }}</span>
+    {{ from_airports_text }} → {{ to_airports_text }}
+    <span class="text-muted fw-normal">· {{ date_from|display_date }}{% if date_to != date_from %} to {{ date_to|display_date }}{% endif %} · {{ seat|title }} · {{ trip|replace('-',' ')|title }}</span>
   </h2>
-  <a href="{{ url_for('index') }}" class="btn btn-outline-primary btn-sm">
-    <i class="bi bi-arrow-left me-1"></i>New search
-  </a>
+  <div class="d-flex gap-2">
+    {% if csv_url %}
+      <a href="{{ csv_url }}" class="btn btn-success btn-sm">
+        <i class="bi bi-download me-1"></i>Download CSV
+      </a>
+    {% endif %}
+    <a href="{{ url_for('index', from_airports=from_airports_text, to_airports=to_airports_text, date_from=date_from, date_to=date_to, trip=trip, seat=seat, adults=adults, children=children, max_stops=max_stops if max_stops is not none else '', cache_days=cache_days) }}" class="btn btn-outline-primary btn-sm">
+      <i class="bi bi-arrow-left me-1"></i>New search
+    </a>
+  </div>
 </div>
 
 {% if error %}
@@ -19,166 +25,113 @@
     <i class="bi bi-exclamation-triangle-fill me-2"></i>
     <strong>Could not fetch flights:</strong> {{ error }}
   </div>
-{% elif result %}
-  <!-- Cache notice -->
-  {% if result.from_cache %}
-    <div class="alert alert-info py-2 d-flex align-items-center gap-2" role="alert">
-      <i class="bi bi-database-check"></i>
-      <span>Results served from cache
-        (cached at {{ result.cached_at[:19]|replace('T',' ') }} UTC).</span>
-    </div>
-  {% endif %}
-
-  <!-- Price indicator -->
-  {% if result.current_price %}
-    <div class="mb-3">
-      <span class="badge rounded-pill
-        {% if result.current_price == 'low' %}bg-success
-        {% elif result.current_price == 'high' %}bg-danger
-        {% else %}bg-warning text-dark{% endif %} fs-6">
-        <i class="bi bi-tag-fill me-1"></i>
-        Price level: {{ result.current_price|title }}
-      </span>
-    </div>
-  {% endif %}
-
-  <!-- Filters -->
+{% elif results %}
   <div class="card bg-light mb-4 border-0">
     <div class="card-body py-2">
       <div class="row g-2 align-items-end">
-        <div class="col-auto fw-semibold">
-          <i class="bi bi-funnel me-1"></i>Filter:
-        </div>
-        <div class="col-md-3">
-          <label for="filterAirline" class="form-label form-label-sm mb-1">Airline</label>
-          <select class="form-select form-select-sm" id="filterAirline">
-            <option value="">All airlines</option>
-          </select>
+        <div class="col-auto fw-semibold"><i class="bi bi-funnel me-1"></i>Filter:</div>
+        <div class="col-md-2">
+          <label for="filterDate" class="form-label form-label-sm mb-1">Departure date</label>
+          <select class="form-select form-select-sm" id="filterDate" multiple size="3"></select>
         </div>
         <div class="col-md-2">
-          <label for="filterStops" class="form-label form-label-sm mb-1">Max stops</label>
-          <select class="form-select form-select-sm" id="filterStops">
-            <option value="">Any</option>
-            <option value="0">Non-stop</option>
-            <option value="1">≤ 1 stop</option>
-            <option value="2">≤ 2 stops</option>
-          </select>
+          <label for="filterFromAirport" class="form-label form-label-sm mb-1">From</label>
+          <select class="form-select form-select-sm" id="filterFromAirport" multiple size="3"></select>
         </div>
-        <div class="col-md-3">
-          <label class="form-label form-label-sm mb-1">Max price</label>
-          <div class="input-group input-group-sm">
-            <span class="input-group-text">$</span>
-            <input type="number" class="form-control" id="filterMaxPrice"
-                   placeholder="No limit" min="0">
-          </div>
+        <div class="col-md-2">
+          <label for="filterToAirport" class="form-label form-label-sm mb-1">To</label>
+          <select class="form-select form-select-sm" id="filterToAirport" multiple size="3"></select>
         </div>
-        <div class="col-md-3">
-          <label class="form-label form-label-sm mb-1">Max duration (h)</label>
-          <input type="number" class="form-control form-control-sm" id="filterMaxDuration"
-                 placeholder="No limit" min="0">
+        <div class="col-md-2">
+          <label for="filterAirline" class="form-label form-label-sm mb-1">Airline</label>
+          <select class="form-select form-select-sm" id="filterAirline" multiple size="3"></select>
+        </div>
+        <div class="col-md-1">
+          <label for="filterStops" class="form-label form-label-sm mb-1">Stops</label>
+          <select class="form-select form-select-sm" id="filterStops"><option value="">Any</option><option value="0">0</option><option value="1">≤1</option><option value="2">≤2</option></select>
+        </div>
+        <div class="col-md-1">
+          <label for="filterMaxPrice" class="form-label form-label-sm mb-1">Max Price</label>
+          <input type="number" class="form-control form-control-sm" id="filterMaxPrice" min="0">
+        </div>
+        <div class="col-md-1">
+          <label for="filterMaxDuration" class="form-label form-label-sm mb-1">Max h</label>
+          <input type="number" class="form-control form-control-sm" id="filterMaxDuration" min="0">
         </div>
         <div class="col-auto">
-          <button class="btn btn-sm btn-secondary" id="clearFilters">
-            <i class="bi bi-x-circle me-1"></i>Clear
-          </button>
+          <button class="btn btn-sm btn-secondary" id="clearFilters"><i class="bi bi-x-circle me-1"></i>Clear</button>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Flight count -->
-  <p class="text-muted small mb-2">
-    <span id="visibleCount">{{ result.flights|length }}</span>
-    of {{ result.flights|length }} flight(s) shown
-  </p>
+  <p class="text-muted small mb-2"><span id="visibleCount">0</span> flight(s) shown</p>
 
-  <!-- Flight cards -->
-  {% if result.flights %}
-    <div id="flightList">
-      {% for flight in result.flights %}
-        <div class="card mb-3 flight-card shadow-sm
-          {% if flight.is_best %}border-success{% endif %}"
-          data-airline="{{ flight.name }}"
-          data-stops="{{ flight.stops }}"
-          data-price="{{ flight.price | numeric_price }}"
-          data-duration="{{ flight.duration }}">
+  <div id="flightList">
+    {% for search_entry in results %}
+      <div class="mb-2 text-muted small"><strong>{{ search_entry.from_airport }} → {{ search_entry.to_airport }}</strong> · {{ search_entry.date|display_date }}</div>
 
-          <div class="card-body">
-            <div class="row align-items-center gy-2">
+      {% if search_entry.error %}
+        <div class="alert alert-danger py-2">
+          <i class="bi bi-exclamation-triangle-fill me-1"></i>
+          Could not fetch flights for this itinerary: {{ search_entry.error }}
+        </div>
+      {% elif not search_entry.result or not search_entry.result.flights %}
+        <div class="alert alert-warning py-2">
+          <i class="bi bi-info-circle-fill me-1"></i>
+          No flights found for this itinerary.
+        </div>
+      {% else %}
+        {% if search_entry.result.from_cache %}
+          <div class="alert alert-info py-2 d-flex align-items-center gap-2" role="alert">
+            <i class="bi bi-database-check"></i>
+            <span>Results served from cache (cached at {{ search_entry.result.cached_at[:19]|replace('T',' ') }} UTC).</span>
+          </div>
+        {% endif %}
 
-              <!-- Airline & best badge -->
-              <div class="col-md-3">
-                <div class="fw-semibold">
-                  {{ flight.name }}
-                  {% if flight.is_best %}
-                    <span class="badge bg-success ms-1">Best</span>
+        {% for flight in search_entry.result.flights %}
+          <div class="card mb-3 flight-card shadow-sm {% if flight.is_best %}border-success{% endif %}"
+            data-airline="{{ flight.name }}"
+            data-stops="{{ flight.stops }}"
+            data-price="{{ flight.price | numeric_price }}"
+            data-duration="{{ flight.duration }}"
+            data-from-airport="{{ search_entry.from_airport }}"
+            data-to-airport="{{ search_entry.to_airport }}"
+            data-date="{{ search_entry.date }}">
+            <div class="card-body">
+              <div class="row align-items-center gy-2">
+                <div class="col-md-3">
+                  <div class="fw-semibold">{{ flight.name }} {% if flight.is_best %}<span class="badge bg-success ms-1">Best</span>{% endif %}</div>
+                </div>
+                <div class="col-md-4 text-center">
+                  <div class="d-flex align-items-center justify-content-center gap-2">
+                    <div><div class="fs-5 fw-bold">{{ flight.departure }}</div><small class="text-muted">{{ search_entry.from_airport }}</small></div>
+                    <div class="text-muted px-2"><i class="bi bi-arrow-right"></i><div class="small">{{ flight.duration }}</div></div>
+                    <div><div class="fs-5 fw-bold">{{ flight.arrival }}</div><small class="text-muted">{{ search_entry.to_airport }}</small><small class="text-muted d-block">{{ search_entry.date|display_date }}</small></div>
+                  </div>
+                </div>
+                <div class="col-md-2 text-center">
+                  {% if flight.stops == 0 %}
+                    <span class="badge bg-success">Non-stop</span>
+                  {% elif flight.stops == 1 %}
+                    <span class="badge bg-warning text-dark">1 stop</span>
+                  {% else %}
+                    <span class="badge bg-danger">{{ flight.stops }} stops</span>
                   {% endif %}
                 </div>
-                <small class="text-muted">
-                  <i class="bi bi-person me-1"></i>{{ adults }} adult{% if adults != 1 %}s{% endif %}
-                  {% if children %}, {{ children }} child{% if children != 1 %}ren{% endif %}{% endif %}
-                </small>
+                <div class="col-md-3 text-end"><div class="fs-4 fw-bold text-primary">{{ flight.price }}</div></div>
               </div>
-
-              <!-- Departure / Arrival -->
-              <div class="col-md-4 text-center">
-                <div class="d-flex align-items-center justify-content-center gap-2">
-                  <div>
-                    <div class="fs-5 fw-bold">{{ flight.departure }}</div>
-                    <small class="text-muted">{{ from_airport }}</small>
-                  </div>
-                  <div class="text-muted px-2">
-                    <i class="bi bi-arrow-right"></i>
-                    <div class="small">{{ flight.duration }}</div>
-                  </div>
-                  <div>
-                    <div class="fs-5 fw-bold">
-                      {{ flight.arrival }}
-                      {% if flight.arrival_time_ahead %}
-                        <sup class="text-danger small">+{{ flight.arrival_time_ahead }}</sup>
-                      {% endif %}
-                    </div>
-                    <small class="text-muted">{{ to_airport }}</small>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Stops -->
-              <div class="col-md-2 text-center">
-                {% if flight.stops == 0 %}
-                  <span class="badge bg-success">Non-stop</span>
-                {% else %}
-                  <span class="badge bg-warning text-dark">
-                    {{ flight.stops }} stop{% if flight.stops != 1 %}s{% endif %}
-                  </span>
-                {% endif %}
-                {% if flight.delay %}
-                  <div class="small text-danger mt-1">
-                    <i class="bi bi-clock-history me-1"></i>{{ flight.delay }}
-                  </div>
-                {% endif %}
-              </div>
-
-              <!-- Price -->
-              <div class="col-md-3 text-end">
-                <div class="fs-4 fw-bold text-primary">{{ flight.price }}</div>
-                <small class="text-muted">per person</small>
-              </div>
-
             </div>
           </div>
-        </div>
-      {% endfor %}
-    </div>
-    <p id="noResults" class="text-muted text-center py-4 d-none">
-      <i class="bi bi-emoji-frown fs-1 d-block mb-2"></i>
-      No flights match the current filters.
-    </p>
-  {% else %}
-    <div class="alert alert-warning">
-      <i class="bi bi-info-circle-fill me-2"></i>No flights found for this route and date.
-    </div>
-  {% endif %}
+        {% endfor %}
+      {% endif %}
+    {% endfor %}
+  </div>
+
+  <p id="noResults" class="text-muted text-center py-4 d-none">
+    <i class="bi bi-emoji-frown fs-1 d-block mb-2"></i>
+    No flights match the current filters.
+  </p>
 {% endif %}
 {% endblock %}
 
@@ -186,34 +139,62 @@
 <script>
 (function () {
   const cards = Array.from(document.querySelectorAll('.flight-card'));
-
-  // Populate airline dropdown from results
   const airlineSelect = document.getElementById('filterAirline');
-  if (airlineSelect) {
-    const airlines = [...new Set(cards.map(c => c.dataset.airline))].sort();
-    airlines.forEach(a => {
+  const dateSelect = document.getElementById('filterDate');
+  const fromSelect = document.getElementById('filterFromAirport');
+  const toSelect = document.getElementById('filterToAirport');
+
+  function fillMultiSelect(selectEl, values) {
+    if (!selectEl) return;
+    values.forEach(v => {
       const opt = document.createElement('option');
-      opt.value = a;
-      opt.textContent = a;
-      airlineSelect.appendChild(opt);
+      opt.value = v;
+      opt.textContent = v;
+      selectEl.appendChild(opt);
     });
   }
 
+  const airlineValues = [...new Set(cards.map(c => c.dataset.airline))].sort((a, b) => {
+    const aEmpty = (a || '').trim() === '';
+    const bEmpty = (b || '').trim() === '';
+    if (aEmpty && !bEmpty) return 1;
+    if (!aEmpty && bEmpty) return -1;
+    return a.localeCompare(b);
+  });
+  fillMultiSelect(airlineSelect, airlineValues);
+  fillMultiSelect(dateSelect, [...new Set(cards.map(c => c.dataset.date))].sort());
+  fillMultiSelect(fromSelect, [...new Set(cards.map(c => c.dataset.fromAirport))].sort());
+  fillMultiSelect(toSelect, [...new Set(cards.map(c => c.dataset.toAirport))].sort());
+
+  function selectedValues(selectEl) {
+    if (!selectEl) return [];
+    return Array.from(selectEl.selectedOptions).map(opt => opt.value);
+  }
+
   function applyFilters() {
-    const airline   = (airlineSelect?.value || '').toLowerCase();
-    const maxStops  = document.getElementById('filterStops')?.value;
-    const maxPrice  = parseFloat(document.getElementById('filterMaxPrice')?.value) || Infinity;
+    const airlines = selectedValues(airlineSelect).map(v => v.toLowerCase());
+    const fromAirports = selectedValues(fromSelect).map(v => v.toLowerCase());
+    const toAirports = selectedValues(toSelect).map(v => v.toLowerCase());
+    const filterDates = selectedValues(dateSelect);
+    const maxStops = document.getElementById('filterStops')?.value;
+    const maxPrice = parseFloat(document.getElementById('filterMaxPrice')?.value) || Infinity;
     const maxDurHrs = parseFloat(document.getElementById('filterMaxDuration')?.value) || Infinity;
 
     let visible = 0;
     cards.forEach(card => {
-      const cardAirline  = card.dataset.airline.toLowerCase();
-      const cardStops    = parseInt(card.dataset.stops, 10);
-      const cardPrice    = card.dataset.price ? parseFloat(card.dataset.price) : NaN;
-      const cardDurHrs   = parseDurationHours(card.dataset.duration);
+      const cardAirline = card.dataset.airline.toLowerCase();
+      const cardStops = parseInt(card.dataset.stops, 10);
+      const cardPrice = card.dataset.price ? parseFloat(card.dataset.price) : NaN;
+      const cardDurHrs = parseDurationHours(card.dataset.duration);
+      const cardFrom = (card.dataset.fromAirport || '').toLowerCase();
+      const cardTo = (card.dataset.toAirport || '').toLowerCase();
+      const cardDate = card.dataset.date || '';
 
       const ok =
-        (!airline   || cardAirline.includes(airline)) &&
+        (airlines.length === 0 || airlines.includes(cardAirline)) &&
+        (fromAirports.length === 0 || fromAirports.includes(cardFrom)) &&
+        (toAirports.length === 0 || toAirports.includes(cardTo)) &&
+        (filterDates.length === 0 || filterDates.includes(cardDate)) &&
         (maxStops === '' || cardStops <= parseInt(maxStops, 10)) &&
         (isNaN(cardPrice) || cardPrice <= maxPrice) &&
         (cardDurHrs === null || cardDurHrs <= maxDurHrs);
@@ -224,8 +205,7 @@
 
     const countEl = document.getElementById('visibleCount');
     if (countEl) countEl.textContent = visible;
-    const noResults = document.getElementById('noResults');
-    if (noResults) noResults.classList.toggle('d-none', visible > 0 || cards.length === 0);
+    document.getElementById('noResults')?.classList.toggle('d-none', visible > 0 || cards.length === 0);
   }
 
   function parseDurationHours(dur) {
@@ -237,19 +217,30 @@
     return h + m / 60;
   }
 
-  ['filterAirline','filterStops','filterMaxPrice','filterMaxDuration'].forEach(id => {
+  ['filterAirline','filterStops','filterMaxPrice','filterMaxDuration','filterDate','filterFromAirport','filterToAirport'].forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.addEventListener('input', applyFilters);
-    if (el) el.addEventListener('change', applyFilters);
+    if (el) {
+      el.addEventListener('input', applyFilters);
+      el.addEventListener('change', applyFilters);
+    }
   });
 
   document.getElementById('clearFilters')?.addEventListener('click', () => {
-    ['filterAirline','filterStops','filterMaxPrice','filterMaxDuration'].forEach(id => {
+    ['filterAirline','filterStops','filterMaxPrice','filterMaxDuration','filterDate','filterFromAirport','filterToAirport'].forEach(id => {
       const el = document.getElementById(id);
-      if (el) el.value = '';
+      if (!el) return;
+      if (el.tagName === 'SELECT' && el.multiple) {
+        Array.from(el.options).forEach(opt => {
+          opt.selected = false;
+        });
+      } else {
+        el.value = '';
+      }
     });
     applyFilters();
   });
+
+  applyFilters();
 })();
 </script>
 {% endblock %}

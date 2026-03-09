@@ -11,116 +11,89 @@
         </h1>
 
         <form method="post" action="{{ url_for('search') }}" id="searchForm">
-          <!-- Airports -->
           <div class="row g-3 mb-3">
             <div class="col-md-6">
-              <label for="from_airport" class="form-label fw-semibold">From</label>
+              <label for="from_airports" class="form-label fw-semibold">From</label>
               <div class="input-group">
                 <span class="input-group-text"><i class="bi bi-geo-alt"></i></span>
-                <input type="text"
-                       class="form-control text-uppercase"
-                       id="from_airport"
-                       name="from_airport"
-                       placeholder="e.g. JFK"
-                       maxlength="3"
-                       pattern="[A-Za-z]{3}"
-                       title="3-letter IATA airport code"
-                       required>
+                <input type="text" class="form-control text-uppercase" id="from_airports" name="from_airports" placeholder="e.g. JFK, EWR" title="Comma-separated 3-letter IATA airport codes" value="{{ defaults.from_airports if defaults else '' }}" required>
               </div>
-              <div class="form-text">3-letter IATA code</div>
+              <div class="form-text">One or more 3-letter IATA codes, comma-separated</div>
             </div>
             <div class="col-md-6">
-              <label for="to_airport" class="form-label fw-semibold">To</label>
+              <label for="to_airports" class="form-label fw-semibold">To</label>
               <div class="input-group">
                 <span class="input-group-text"><i class="bi bi-geo"></i></span>
-                <input type="text"
-                       class="form-control text-uppercase"
-                       id="to_airport"
-                       name="to_airport"
-                       placeholder="e.g. LAX"
-                       maxlength="3"
-                       pattern="[A-Za-z]{3}"
-                       title="3-letter IATA airport code"
-                       required>
+                <input type="text" class="form-control text-uppercase" id="to_airports" name="to_airports" placeholder="e.g. LAX, SFO" title="Comma-separated 3-letter IATA airport codes" value="{{ defaults.to_airports if defaults else '' }}" required>
               </div>
-              <div class="form-text">3-letter IATA code</div>
+              <div class="form-text">One or more 3-letter IATA codes, comma-separated</div>
             </div>
           </div>
 
-          <!-- Date & Trip type -->
           <div class="row g-3 mb-3">
             <div class="col-md-6">
-              <label for="date" class="form-label fw-semibold">Departure date</label>
+              <label for="date_from" class="form-label fw-semibold">Departure date from</label>
               <div class="input-group">
                 <span class="input-group-text"><i class="bi bi-calendar3"></i></span>
-                <input type="date"
-                       class="form-control"
-                       id="date"
-                       name="date"
-                       required>
+                <input type="date" class="form-control" id="date_from" name="date_from" value="{{ defaults.date_from if defaults else '' }}" required>
               </div>
             </div>
             <div class="col-md-6">
+              <label for="date_to" class="form-label fw-semibold">Departure date to</label>
+              <div class="input-group">
+                <span class="input-group-text"><i class="bi bi-calendar-range"></i></span>
+                <input type="date" class="form-control" id="date_to" name="date_to" value="{{ defaults.date_to if defaults else '' }}">
+              </div>
+            </div>
+            <div class="col-md-12">
               <label for="trip" class="form-label fw-semibold">Trip type</label>
               <select class="form-select" id="trip" name="trip">
-                <option value="one-way">One-way</option>
-                <option value="round-trip">Round-trip</option>
-                <option value="multi-city">Multi-city</option>
+                <option value="one-way" {% if defaults and defaults.trip == 'one-way' %}selected{% endif %}>One-way</option>
+                <option value="round-trip" {% if defaults and defaults.trip == 'round-trip' %}selected{% endif %}>Round-trip</option>
+                <option value="multi-city" {% if defaults and defaults.trip == 'multi-city' %}selected{% endif %}>Multi-city</option>
               </select>
             </div>
           </div>
 
-          <!-- Seat & Passengers -->
           <div class="row g-3 mb-3">
             <div class="col-md-4">
               <label for="seat" class="form-label fw-semibold">Cabin class</label>
               <select class="form-select" id="seat" name="seat">
-                <option value="economy">Economy</option>
-                <option value="premium-economy">Premium Economy</option>
-                <option value="business">Business</option>
-                <option value="first">First</option>
+                <option value="economy" {% if defaults and defaults.seat == 'economy' %}selected{% endif %}>Economy</option>
+                <option value="premium-economy" {% if defaults and defaults.seat == 'premium-economy' %}selected{% endif %}>Premium Economy</option>
+                <option value="business" {% if defaults and defaults.seat == 'business' %}selected{% endif %}>Business</option>
+                <option value="first" {% if defaults and defaults.seat == 'first' %}selected{% endif %}>First</option>
               </select>
             </div>
             <div class="col-md-4">
               <label for="adults" class="form-label fw-semibold">Adults</label>
-              <input type="number" class="form-control" id="adults" name="adults"
-                     min="1" max="9" value="1">
+              <input type="number" class="form-control" id="adults" name="adults" min="1" max="9" value="{{ defaults.adults if defaults else '1' }}">
             </div>
             <div class="col-md-4">
               <label for="children" class="form-label fw-semibold">Children</label>
-              <input type="number" class="form-control" id="children" name="children"
-                     min="0" max="9" value="0">
+              <input type="number" class="form-control" id="children" name="children" min="0" max="9" value="{{ defaults.children if defaults else '0' }}">
             </div>
           </div>
 
-          <!-- Advanced options (collapsed by default) -->
           <div class="mb-3">
-            <a class="text-decoration-none small" data-bs-toggle="collapse"
-               href="#advancedOptions" role="button">
+            <button class="btn btn-link text-decoration-none small p-0" id="advancedOptionsToggle" type="button" data-bs-toggle="collapse" data-bs-target="#advancedOptions" aria-expanded="false" aria-controls="advancedOptions">
               <i class="bi bi-sliders me-1"></i>Advanced options
-            </a>
+            </button>
             <div class="collapse" id="advancedOptions">
               <div class="card card-body bg-light mt-2">
                 <div class="row g-3">
                   <div class="col-md-6">
                     <label for="max_stops" class="form-label">Max stops</label>
                     <select class="form-select" id="max_stops" name="max_stops">
-                      <option value="">Any</option>
-                      <option value="0">Non-stop only</option>
-                      <option value="1">Up to 1 stop</option>
-                      <option value="2">Up to 2 stops</option>
+                      <option value="" {% if not defaults or defaults.max_stops == '' %}selected{% endif %}>Any</option>
+                      <option value="0" {% if defaults and defaults.max_stops == '0' %}selected{% endif %}>Non-stop only</option>
+                      <option value="1" {% if defaults and defaults.max_stops == '1' %}selected{% endif %}>Up to 1 stop</option>
+                      <option value="2" {% if defaults and defaults.max_stops == '2' %}selected{% endif %}>Up to 2 stops</option>
                     </select>
                   </div>
                   <div class="col-md-6">
-                    <label for="cache_days" class="form-label">
-                      Cache freshness (days)
-                    </label>
-                    <input type="number" class="form-control" id="cache_days"
-                           name="cache_days" min="0" max="30" value="1">
-                    <div class="form-text">
-                      Use cached results if they are less than this many days old.
-                      Set to 0 to always fetch live data.
-                    </div>
+                    <label for="cache_days" class="form-label">Cache freshness (days)</label>
+                    <input type="number" class="form-control" id="cache_days" name="cache_days" min="0" max="30" value="{{ defaults.cache_days if defaults else '1' }}">
                   </div>
                 </div>
               </div>
@@ -128,11 +101,17 @@
           </div>
 
           <div class="d-grid">
-            <button type="submit" class="btn btn-primary btn-lg">
-              <i class="bi bi-search me-2"></i>Search flights
+            <button type="submit" class="btn btn-primary btn-lg" id="searchSubmitBtn">
+              <i class="bi bi-search me-2" id="searchIcon"></i>
+              <span id="searchBtnLabel">Search flights</span>
+              <span id="searchSpinner" class="spinner-border spinner-border-sm ms-2 d-none" role="status" aria-hidden="true"></span>
             </button>
           </div>
         </form>
+
+        <div class="alert alert-info mt-3 d-none" id="searchLoadingNotice">
+          <i class="bi bi-hourglass-split me-2"></i>Searching itineraries… this can take a moment.
+        </div>
       </div>
     </div>
   </div>
@@ -141,13 +120,63 @@
 
 {% block scripts %}
 <script>
-  // Set min date to today
-  document.getElementById('date').min = new Date().toISOString().split('T')[0];
-  // Auto-uppercase airport codes
-  ['from_airport','to_airport'].forEach(id => {
-    document.getElementById(id).addEventListener('input', function() {
+(function () {
+  const dateFrom = document.getElementById('date_from');
+  const dateTo = document.getElementById('date_to');
+  const form = document.getElementById('searchForm');
+  const advancedToggle = document.getElementById('advancedOptionsToggle');
+  const advancedOptions = document.getElementById('advancedOptions');
+
+  function todayIso() {
+    return new Date().toISOString().split('T')[0];
+  }
+
+  function syncDateConstraints() {
+    if (!dateFrom || !dateTo) return;
+    dateFrom.min = todayIso();
+    if (dateFrom.value) {
+      dateTo.min = dateFrom.value;
+      if (!dateTo.value || dateTo.value < dateFrom.value) {
+        dateTo.value = dateFrom.value;
+      }
+    } else {
+      dateTo.min = todayIso();
+    }
+  }
+
+  ['from_airports', 'to_airports'].forEach(id => {
+    const el = document.getElementById(id);
+    el?.addEventListener('input', function () {
       this.value = this.value.toUpperCase();
     });
   });
+
+  if (dateFrom && !dateFrom.value) {
+    dateFrom.value = todayIso();
+  }
+  syncDateConstraints();
+
+  dateFrom?.addEventListener('change', syncDateConstraints);
+  dateTo?.addEventListener('focus', syncDateConstraints);
+
+  form?.addEventListener('submit', () => {
+    if (dateFrom?.value && !dateTo?.value) {
+      dateTo.value = dateFrom.value;
+    }
+    document.getElementById('searchSpinner')?.classList.remove('d-none');
+    document.getElementById('searchLoadingNotice')?.classList.remove('d-none');
+    const label = document.getElementById('searchBtnLabel');
+    if (label) label.textContent = 'Searching...';
+    const submitBtn = document.getElementById('searchSubmitBtn');
+    if (submitBtn) submitBtn.disabled = true;
+  });
+
+  // Fallback toggle in case Bootstrap JS collapse doesn't initialize
+  advancedToggle?.addEventListener('click', () => {
+    if (!advancedOptions) return;
+    if (window.bootstrap && window.bootstrap.Collapse) return;
+    advancedOptions.classList.toggle('show');
+  });
+})();
 </script>
 {% endblock %}
