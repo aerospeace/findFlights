@@ -154,7 +154,14 @@
     });
   }
 
-  fillMultiSelect(airlineSelect, [...new Set(cards.map(c => c.dataset.airline))].sort());
+  const airlineValues = [...new Set(cards.map(c => c.dataset.airline))].sort((a, b) => {
+    const aEmpty = (a || '').trim() === '';
+    const bEmpty = (b || '').trim() === '';
+    if (aEmpty && !bEmpty) return 1;
+    if (!aEmpty && bEmpty) return -1;
+    return a.localeCompare(b);
+  });
+  fillMultiSelect(airlineSelect, airlineValues);
   fillMultiSelect(dateSelect, [...new Set(cards.map(c => c.dataset.date))].sort());
   fillMultiSelect(fromSelect, [...new Set(cards.map(c => c.dataset.fromAirport))].sort());
   fillMultiSelect(toSelect, [...new Set(cards.map(c => c.dataset.toAirport))].sort());

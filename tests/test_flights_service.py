@@ -236,6 +236,7 @@ class TestRoutes:
     def test_index_advanced_options_toggle_present(self, client):
         response = client.get("/")
         assert b"data-bs-target=\"#advancedOptions\"" in response.data
+        assert b"id=\"advancedOptionsToggle\"" in response.data
 
     def test_search_missing_params_redirects(self, client):
         response = client.get("/search")
@@ -291,6 +292,7 @@ class TestRoutes:
                     },
                 )
         assert b"id=\"filterAirline\" multiple" in response.data
+        assert b"airlineValues" in response.data
 
     def test_api_search_missing_params(self, client):
         response = client.get("/api/search")
